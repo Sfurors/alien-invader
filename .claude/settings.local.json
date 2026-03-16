@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(ruff:*)",
+      "Bash(cd D:/PROJEKTY/alien_invasion && timeout 5 python alien_invasion.py --size small 2>&1; echo \"EXIT: $?\")",
+      "Bash(cd D:/PROJEKTY/alien_invasion && rm -rf .sound_cache && python -c \"\nimport time, pygame\npygame.mixer.pre_init\\(44100, -16, 2, 512\\)\npygame.init\\(\\)\nt0 = time.time\\(\\)\nfrom sounds import load_sounds\nsounds = load_sounds\\(\\)\nprint\\(f'First run \\(generate + cache\\): {time.time\\(\\)-t0:.1f}s'\\)\npygame.quit\\(\\)\n\" 2>&1)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path' | xargs ruff format"
+          }
+        ]
+      }
+    ]
+  }
+}
