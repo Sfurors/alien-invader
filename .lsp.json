@@ -1,7 +1,0 @@
-{
-    "python": {
-      "command": "pyright",
-      "args": ["--outputjson"],
-      "initializationOptions": {}
-    }
-}

@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Testing / coverage
+.coverage
+.pytest_cache/
+htmlcov/
+
+# Linting / tooling
+.ruff_cache/
+.lsp.json
+pyrightconfig.json
+
+# Sound cache
+.sound_cache/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store

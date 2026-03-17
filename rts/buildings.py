@@ -10,6 +10,8 @@ def update_buildings(rts_ctx, state):
     """Per-frame update for all buildings."""
     _update_group(rts_ctx.player_buildings, rts_ctx, state, "human")
     _update_group(rts_ctx.enemy_buildings, rts_ctx, state, "lizard")
+    # Clean up destroyed buildings
+    _cleanup_destroyed(rts_ctx, state)
 
 
 def _update_group(group, rts_ctx, state, faction):
@@ -54,6 +56,29 @@ def _spawn_produced_unit(building, unit_type, rts_ctx, faction):
     else:
         rts_ctx.enemy_units.add(unit)
     rts_ctx.all_entities.add(unit)
+
+
+def _cleanup_destroyed(rts_ctx, state):
+    """Remove destroyed buildings and handle crystal loss from mining camps."""
+    for b in list(rts_ctx.player_buildings):
+        if b.destroyed:
+            # Lose crystals stored in mining camps
+            if b.is_mining_camp and b.stored_crystals > 0:
+                state.crystals = max(0, state.crystals - b.stored_crystals)
+            # Lose isotope stored in isotope camps
+            if b.is_isotope_camp and b.stored_isotope > 0:
+                state.isotope = max(0, state.isotope - b.stored_isotope)
+            rts_ctx.player_buildings.discard(b)
+            rts_ctx.all_entities.discard(b)
+
+    for b in list(rts_ctx.enemy_buildings):
+        if b.destroyed:
+            if rts_ctx.ai and b.is_mining_camp and b.stored_crystals > 0:
+                rts_ctx.ai.crystals = max(0, rts_ctx.ai.crystals - b.stored_crystals)
+            if rts_ctx.ai and b.is_isotope_camp and b.stored_isotope > 0:
+                rts_ctx.ai.isotope = max(0, rts_ctx.ai.isotope - b.stored_isotope)
+            rts_ctx.enemy_buildings.discard(b)
+            rts_ctx.all_entities.discard(b)
 
 
 def _turret_attack(building, rts_ctx):

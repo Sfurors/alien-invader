@@ -265,6 +265,42 @@ SPINE_MAP = [
     [3, 3, 3, 3, 3, 3],
 ]
 
+# ── Isotope buildings ────────────────────────────────────────────
+
+ISOTOPE_EXTRACTOR_PS = 3
+ISOTOPE_EXTRACTOR_PALETTE = {
+    1: (140, 140, 150),  # metal
+    2: (110, 110, 120),  # metal dark
+    3: (170, 170, 180),  # metal light
+    4: (50, 220, 80),  # green glow
+    5: (60, 60, 70),  # pipe
+}
+ISOTOPE_EXTRACTOR_MAP = [
+    [0, 3, 3, 3, 3, 3, 3, 0],
+    [3, 1, 4, 1, 1, 4, 1, 3],
+    [1, 1, 5, 4, 4, 5, 1, 1],
+    [1, 2, 5, 1, 1, 5, 2, 1],
+    [1, 2, 1, 4, 4, 1, 2, 1],
+    [2, 2, 2, 2, 2, 2, 2, 2],
+]
+
+ISOTOPE_SIPHON_PS = 3
+ISOTOPE_SIPHON_PALETTE = {
+    1: (70, 60, 50),  # organic base
+    2: (100, 90, 70),  # organic light
+    3: (50, 40, 30),  # dark
+    4: (50, 220, 80),  # green bio-glow
+    5: (30, 180, 60),  # darker green
+}
+ISOTOPE_SIPHON_MAP = [
+    [0, 2, 2, 2, 2, 2, 2, 0],
+    [2, 1, 4, 1, 1, 4, 1, 2],
+    [2, 1, 5, 4, 4, 5, 1, 2],
+    [2, 1, 1, 5, 5, 1, 1, 2],
+    [2, 3, 1, 4, 4, 1, 3, 2],
+    [3, 3, 3, 3, 3, 3, 3, 3],
+]
+
 # ── Crystal resource sprite ───────────────────────────────────────
 
 CRYSTAL_PS = 3
@@ -303,6 +339,16 @@ def get_sprite_data(entity_type):
         "hive": (HIVE_MAP, HIVE_PALETTE, HIVE_PS),
         "war_pit": (WAR_PIT_MAP, WAR_PIT_PALETTE, WAR_PIT_PS),
         "spine": (SPINE_MAP, SPINE_PALETTE, SPINE_PS),
+        "isotope_extractor": (
+            ISOTOPE_EXTRACTOR_MAP,
+            ISOTOPE_EXTRACTOR_PALETTE,
+            ISOTOPE_EXTRACTOR_PS,
+        ),
+        "isotope_siphon": (
+            ISOTOPE_SIPHON_MAP,
+            ISOTOPE_SIPHON_PALETTE,
+            ISOTOPE_SIPHON_PS,
+        ),
         "crystal": (CRYSTAL_MAP, CRYSTAL_PALETTE, CRYSTAL_PS),
     }
     return _SPRITES.get(entity_type)

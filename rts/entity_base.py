@@ -25,6 +25,8 @@ class BaseUnit(pygame.sprite.Sprite):
         self.can_harvest = stats.get("can_harvest", False)
         self.harvest_rate = stats.get("harvest_rate", 0)
         self.carry_capacity = stats.get("carry_capacity", 0)
+        self.isotope_harvest_rate = stats.get("isotope_harvest_rate", 0)
+        self.isotope_carry_capacity = stats.get("isotope_carry_capacity", 0)
         self.vision = stats.get("vision", S.UNIT_VISION_RANGE)
 
         # Position (pixel coords)
@@ -43,15 +45,22 @@ class BaseUnit(pygame.sprite.Sprite):
 
         # Harvesting
         self.carrying = 0
+        self.carrying_isotope = 0
         self.harvest_target = None  # (tx, ty)
         self.return_target = None  # building to return to
         self.harvesting = False
         self.returning = False
         self.harvest_timer = 0
         self.harvest_cooldown_max = S.HARVEST_COOLDOWN
+        self.harvest_resource_type = None  # "crystal" or "isotope"
+
+        # Building
+        self.build_target = None  # reference to building under construction
+        self.building = False
 
         # Mining camp assignment
         self.assigned_camp = None  # reference to mining_camp building
+        self.assigned_isotope_camp = None  # reference to isotope extractor/siphon
         self.caravan_mode = False
         self._normal_speed = self.speed
         self._normal_image = None  # set after _build_image
@@ -121,6 +130,8 @@ class BaseUnit(pygame.sprite.Sprite):
         self.harvesting = False
         self.returning = False
         self.harvest_timer = 0
+        self.build_target = None
+        self.building = False
 
     def distance_to_tile(self, tx, ty):
         dx = self.tile_x - tx
@@ -154,6 +165,9 @@ class BaseBuilding(pygame.sprite.Sprite):
         self.crystal_capacity = stats.get("crystal_capacity", 0)
         self.stored_crystals = 0
         self.is_mining_camp = stats.get("is_mining_camp", False)
+        self.isotope_capacity = stats.get("isotope_capacity", 0)
+        self.stored_isotope = 0
+        self.is_isotope_camp = stats.get("is_isotope_camp", False)
 
         # Position (top-left tile)
         self.tile_x = tile_x
@@ -247,9 +261,12 @@ class BaseBuilding(pygame.sprite.Sprite):
 
     def update(self):
         if self.under_construction:
-            self.build_progress += 1
-            if self.build_progress >= self.build_time:
-                self.under_construction = False
+            if self.faction != "human":
+                # Non-human buildings auto-grow (lizard buildings are semi-organic)
+                self.build_progress += 1
+                if self.build_progress >= self.build_time:
+                    self.under_construction = False
+            # Human buildings wait for an engineer
             return
 
         # Production

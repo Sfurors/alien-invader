@@ -2,7 +2,7 @@
 
 import random
 from .rts_settings import RTSSettings as S
-from .entity_base import BaseUnit, BaseBuilding
+from .entity_base import BaseBuilding
 from .entity_registry import UNIT_DEFS, BUILDING_DEFS
 from .pathfinding import find_path
 from .buildings import can_place_building
@@ -21,11 +21,13 @@ class LizardAI:
         self.state = self.BUILDUP
         self.frame = 0
         self.crystals = 300  # AI has its own resource pool
+        self.isotope = S.AI_STARTING_ISOTOPE
         self.last_produce_frame = 0
         self.last_attack_frame = 0
         self.attack_target = None
         self.defend_target = None  # (tx, ty) location to defend
         self.has_war_pit = False
+        self.has_isotope_siphon = False
         self.last_supply_drop = 0
         self.desired_drones = 2  # target number of drones
 
@@ -71,9 +73,18 @@ class LizardAI:
         # Produce units
         self._produce(rts_ctx)
 
+        # Build isotope siphon first (needed for war_pit isotope cost)
+        if not self.has_isotope_siphon and self.crystals >= 150:
+            self._build_isotope_siphon(rts_ctx)
+
         # Build war pit if enough resources and don't have one
-        if not self.has_war_pit and self.crystals >= 200:
-            self._build_war_pit(rts_ctx)
+        if not self.has_war_pit:
+            cost = BUILDING_DEFS["war_pit"]["cost"]
+            if self.crystals >= cost["crystals"] and self.isotope >= cost["isotope"]:
+                self._build_war_pit(rts_ctx)
+
+        # Retarget idle military units near enemies
+        self._retarget_idle(rts_ctx)
 
         # Execute state behavior
         if self.state == self.SCOUT:
@@ -115,18 +126,59 @@ class LizardAI:
                 continue
 
             cost = UNIT_DEFS[unit_type]["cost"]
-            if self.crystals >= cost:
-                self.crystals -= cost
+            if self.crystals >= cost["crystals"] and self.isotope >= cost["isotope"]:
+                self.crystals -= cost["crystals"]
+                self.isotope -= cost["isotope"]
                 building.start_production(unit_type)
                 self.last_produce_frame = self.frame
                 if unit_type == "drone":
                     drone_count += 1
+
+    def _build_isotope_siphon(self, rts_ctx):
+        """Build isotope siphon near nearest isotope deposit."""
+        hive = self._get_hive(rts_ctx)
+        if not hive:
+            return
+
+        # Find nearest isotope tile to hive
+        hcx, hcy = hive.center_tile()
+        best_tile = None
+        best_dist = float("inf")
+        tm = rts_ctx.tile_map
+        for ty in range(tm.height):
+            for tx in range(tm.width):
+                if tm.tiles[ty][tx] == S.ISOTOPE and tm.isotope[ty][tx] > 0:
+                    d = abs(tx - hcx) + abs(ty - hcy)
+                    if d < best_dist:
+                        best_dist = d
+                        best_tile = (tx, ty)
+
+        if not best_tile:
+            return
+
+        # Try to place siphon within 2 tiles of the isotope deposit
+        itx, ity = best_tile
+        size = BUILDING_DEFS["isotope_siphon"]["size"]
+        for dy in range(-2, 3):
+            for dx in range(-2, 3):
+                px, py = itx + dx, ity + dy
+                if can_place_building(tm, px, py, size, rts_ctx):
+                    self.crystals -= 150
+                    building = BaseBuilding("isotope_siphon", px, py, "lizard")
+                    building.under_construction = True
+                    building.build_time = 360  # half speed: 6 sec
+                    building.tile_map = tm
+                    rts_ctx.enemy_buildings.add(building)
+                    rts_ctx.all_entities.add(building)
+                    self.has_isotope_siphon = True
+                    return
 
     def _build_war_pit(self, rts_ctx):
         hive = self._get_hive(rts_ctx)
         if not hive:
             return
 
+        cost = BUILDING_DEFS["war_pit"]["cost"]
         # Try to place near hive
         for dy in range(-4, 5):
             for dx in range(-4, 5):
@@ -134,9 +186,11 @@ class LizardAI:
                 ty = hive.tile_y + dy
                 size = BUILDING_DEFS["war_pit"]["size"]
                 if can_place_building(rts_ctx.tile_map, tx, ty, size, rts_ctx):
-                    self.crystals -= 200
+                    self.crystals -= cost["crystals"]
+                    self.isotope -= cost["isotope"]
                     building = BaseBuilding("war_pit", tx, ty, "lizard")
                     building.under_construction = True
+                    building.build_time = 360  # half speed: 6 sec
                     building.tile_map = rts_ctx.tile_map
                     rts_ctx.enemy_buildings.add(building)
                     rts_ctx.all_entities.add(building)
@@ -144,21 +198,65 @@ class LizardAI:
                     return
 
     def _manage_drones(self, rts_ctx):
-        """Send idle drones to nearest crystal tile to harvest."""
+        """Send idle drones to nearest resource tile to harvest."""
         occupied = self._get_occupied(rts_ctx)
+
+        # Check if we have an isotope siphon that needs a drone
+        isotope_siphon = None
+        for b in rts_ctx.enemy_buildings:
+            if b.building_type == "isotope_siphon" and not b.under_construction:
+                isotope_siphon = b
+                break
+
+        # Check if any drone is already assigned to isotope
+        has_isotope_drone = any(
+            u.unit_type == "drone" and u.assigned_isotope_camp is not None
+            for u in rts_ctx.enemy_units
+        )
+
         for unit in rts_ctx.enemy_units:
             if unit.unit_type != "drone":
                 continue
             # Skip drones already harvesting/returning/moving
             if unit.harvesting or unit.returning or unit.moving:
                 continue
+
+            # Full of crystals — send to base
             if unit.carrying >= unit.carry_capacity:
-                # Full — send to base
                 unit.returning = True
                 from .units import _send_to_base
 
                 _send_to_base(unit, rts_ctx, occupied)
                 continue
+
+            # Full of isotope — send to siphon or base
+            if (
+                unit.carrying_isotope >= unit.isotope_carry_capacity
+                and unit.isotope_carry_capacity > 0
+            ):
+                unit.returning = True
+                if unit.assigned_isotope_camp and unit.assigned_isotope_camp.alive():
+                    from .units import _send_to_isotope_camp
+
+                    _send_to_isotope_camp(unit, rts_ctx, occupied)
+                else:
+                    from .units import _send_to_base
+
+                    _send_to_base(unit, rts_ctx, occupied)
+                continue
+
+            # Assign one drone to isotope if siphon exists and no drone assigned yet
+            if (
+                isotope_siphon
+                and not has_isotope_drone
+                and not unit.assigned_isotope_camp
+            ):
+                unit.assigned_isotope_camp = isotope_siphon
+                unit.harvest_resource_type = "isotope"
+                has_isotope_drone = True
+                # Will be handled by _handle_isotope_camp_idle
+                continue
+
             # Find nearest crystal tile
             best_tile = None
             best_dist = float("inf")
@@ -173,6 +271,7 @@ class LizardAI:
             if best_tile:
                 unit.harvest_target = best_tile
                 unit.harvesting = True
+                unit.harvest_resource_type = "crystal"
                 path = find_path(
                     rts_ctx.tile_map,
                     (unit.tile_x, unit.tile_y),
@@ -183,6 +282,7 @@ class LizardAI:
                     unit.set_move_target(path)
                     unit.harvesting = True
                     unit.harvest_target = best_tile
+                    unit.harvest_resource_type = "crystal"
 
     def _supply_drop(self, rts_ctx):
         """Periodic starship supply drop — creates a new crystal tile on the map."""
@@ -224,7 +324,6 @@ class LizardAI:
                     nearest_enemy = pb
 
             if nearest_enemy and nearest_dist <= unit.vision + 1:
-                # Spotted player! Assess: count nearby friendly vs enemy military
                 friendly_nearby = sum(
                     1
                     for u in rts_ctx.enemy_units
@@ -238,11 +337,13 @@ class LizardAI:
                     and unit.distance_to_tile(u.tile_x, u.tile_y) <= 10
                 )
 
-                if friendly_nearby >= enemy_nearby or enemy_nearby == 0:
-                    # Strong enough — engage
+                if (
+                    friendly_nearby >= enemy_nearby
+                    or enemy_nearby == 0
+                    or nearest_dist <= unit.attack_range + 2
+                ):
                     unit.attack_target = nearest_enemy
                 else:
-                    # Outnumbered — retreat toward hive and accelerate attack
                     hive = self._get_hive(rts_ctx)
                     if hive and not unit.moving:
                         cx, cy = hive.center_tile()
@@ -254,7 +355,6 @@ class LizardAI:
                         )
                         if path:
                             unit.set_move_target(path)
-                    # Accelerate next attack — reduce wait by half
                     remaining = S.AI_ATTACK_INTERVAL - (
                         self.frame - self.last_attack_frame
                     )
@@ -295,7 +395,6 @@ class LizardAI:
                 )
                 if path:
                     unit.set_move_target(path)
-                    # Set attack target to nearest player entity
                     best = None
                     best_dist = float("inf")
                     for pu in rts_ctx.player_units:
@@ -311,17 +410,39 @@ class LizardAI:
                             best = pb
                     unit.attack_target = best
 
+    def _retarget_idle(self, rts_ctx):
+        """Give idle military units near enemies a new attack target."""
+        for unit in rts_ctx.enemy_units:
+            if unit.attack_power <= 0:
+                continue
+            if unit.attack_target is not None and unit.attack_target.alive():
+                continue
+            if unit.moving:
+                continue
+            best = None
+            best_dist = float("inf")
+            for pu in rts_ctx.player_units:
+                d = unit.distance_to_tile(pu.tile_x, pu.tile_y)
+                if d <= unit.vision + 1 and d < best_dist:
+                    best_dist = d
+                    best = pu
+            for pb in rts_ctx.player_buildings:
+                cx, cy = pb.center_tile()
+                d = unit.distance_to_tile(cx, cy)
+                if d <= unit.vision + 1 and d < best_dist:
+                    best_dist = d
+                    best = pb
+            if best:
+                unit.attack_target = best
+
     def _find_threat(self, rts_ctx):
         """Find location of threat: any enemy building or unit recently hit."""
-        # Check buildings under attack (hit in last 120 frames = 2 sec)
         for b in rts_ctx.enemy_buildings:
             if b.last_hit_frame is not None and b.last_hit_frame < 120:
                 return b.center_tile()
-        # Check units under attack
         for u in rts_ctx.enemy_units:
             if u.last_hit_frame is not None and u.last_hit_frame < 120:
                 return (u.tile_x, u.tile_y)
-        # Check player units near any enemy building
         for b in rts_ctx.enemy_buildings:
             cx, cy = b.center_tile()
             for pu in rts_ctx.player_units:
@@ -340,11 +461,9 @@ class LizardAI:
         for unit in rts_ctx.enemy_units:
             if unit.attack_power <= 0:
                 continue
-            # Already fighting nearby — don't re-path
             if unit.attack_target is not None and unit.attack_target.alive():
                 continue
 
-            # Find nearest player entity near the threat to attack
             best = None
             best_dist = float("inf")
             for pu in rts_ctx.player_units:
@@ -369,10 +488,8 @@ class LizardAI:
         for b in rts_ctx.player_buildings:
             if b.building_type == "main_base":
                 return b.center_tile()
-        # Fall back to any player building
         for b in rts_ctx.player_buildings:
             return b.center_tile()
-        # Fall back to player units
         for u in rts_ctx.player_units:
             return (u.tile_x, u.tile_y)
         return None

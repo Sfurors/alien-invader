@@ -10,13 +10,23 @@ class Minimap:
         self.surface = pygame.Surface((size, size))
         self.scale_x = size / S.MAP_PIXEL_W
         self.scale_y = size / S.MAP_PIXEL_H
+        # Cache terrain surface to avoid redrawing 36k+ tiles every frame
+        self._terrain_cache = pygame.Surface((size, size))
+        self._terrain_dirty = True
+        self._draw_count = 0
 
-    def draw(self, screen, x, y, tile_map, fog, camera, rts_ctx):
-        self.surface.fill((0, 0, 0))
+    def mark_dirty(self):
+        """Call when fog or terrain changes to refresh the cached terrain."""
+        self._terrain_dirty = True
 
-        # Draw terrain
-        tile_w = max(1, self.size / tile_map.width)
-        tile_h = max(1, self.size / tile_map.height)
+    def _rebuild_terrain(self, tile_map, fog):
+        """Redraw terrain+fog onto the cached surface."""
+        self._terrain_cache.fill((0, 0, 0))
+        tile_w = self.size / tile_map.width
+        tile_h = self.size / tile_map.height
+        pw = max(1, round(tile_w))
+        ph = max(1, round(tile_h))
+
         for ty in range(tile_map.height):
             for tx in range(tile_map.width):
                 if not fog.is_explored(tx, ty):
@@ -24,13 +34,18 @@ class Minimap:
                 color = S.TERRAIN_COLORS.get(tile_map.tiles[ty][tx], (60, 120, 40))
                 if not fog.is_visible(tx, ty):
                     color = tuple(c // 2 for c in color)
-                mx = int(tx * tile_w)
-                my = int(ty * tile_h)
-                pygame.draw.rect(
-                    self.surface,
-                    color,
-                    (mx, my, max(1, int(tile_w)), max(1, int(tile_h))),
-                )
+                mx = round(tx * tile_w)
+                my = round(ty * tile_h)
+                pygame.draw.rect(self._terrain_cache, color, (mx, my, pw, ph))
+        self._terrain_dirty = False
+
+    def draw(self, screen, x, y, tile_map, fog, camera, rts_ctx):
+        # Rebuild terrain cache every 10 frames (fog changes each frame)
+        self._draw_count += 1
+        if self._terrain_dirty or self._draw_count % 10 == 0:
+            self._rebuild_terrain(tile_map, fog)
+
+        self.surface.blit(self._terrain_cache, (0, 0))
 
         # Draw units as dots
         for unit in rts_ctx.player_units:
@@ -39,8 +54,8 @@ class Minimap:
             pygame.draw.rect(self.surface, (0, 200, 255), (mx, my, 2, 2))
 
         for unit in rts_ctx.enemy_units:
-            tx, ty = unit.tile_x, unit.tile_y
-            if fog.is_visible(tx, ty):
+            etx, ety = unit.tile_x, unit.tile_y
+            if fog.is_visible(etx, ety):
                 mx = int(unit.px * self.scale_x)
                 my = int(unit.py * self.scale_y)
                 pygame.draw.rect(self.surface, (255, 60, 60), (mx, my, 2, 2))
@@ -62,11 +77,11 @@ class Minimap:
                 bh = max(2, int(b.size[1] * S.TILE_SIZE * self.scale_y))
                 pygame.draw.rect(self.surface, (255, 80, 30), (mx, my, bw, bh))
 
-        # Camera rectangle
+        # Camera viewport rectangle
         cam_x = int(camera.x * self.scale_x)
         cam_y = int(camera.y * self.scale_y)
-        cam_w = int(camera.screen_w * self.scale_x)
-        cam_h = int(camera.viewport_h * self.scale_y)
+        cam_w = max(4, int(camera.screen_w * self.scale_x))
+        cam_h = max(4, int(camera.viewport_h * self.scale_y))
         pygame.draw.rect(self.surface, (255, 255, 255), (cam_x, cam_y, cam_w, cam_h), 1)
 
         # Blit to screen
