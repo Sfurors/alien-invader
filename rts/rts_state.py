@@ -4,8 +4,9 @@ import pygame
 
 
 class RTSState:
-    def __init__(self, starting_crystals=200):
+    def __init__(self, starting_crystals=200, starting_isotope=0):
         self.crystals = starting_crystals
+        self.isotope = starting_isotope
         self.selected_units = []
         self.selected_building = None
         self.build_mode = None  # None or building type string

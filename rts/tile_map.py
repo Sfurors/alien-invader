@@ -12,15 +12,18 @@ class TileMap:
         self.tiles = [[S.GRASS] * width for _ in range(height)]
         # crystal amounts per tile
         self.crystal = [[0] * width for _ in range(height)]
+        # isotope amounts per tile
+        self.isotope = [[0] * width for _ in range(height)]
         if seed is not None:
             random.seed(seed)
         self._generate()
 
     def _generate(self):
-        self._place_rock_clusters(12)
-        self._place_water_bodies(4)
+        self._place_rock_clusters(100)
+        self._place_water_bodies(32)
         self._place_sand_edges()
-        self._place_crystals(8)
+        self._place_crystals(60)
+        self._place_isotope_vents(20)
         self._clear_starting_area(2, 2)  # player corner
         self._clear_starting_area(
             self.width - 6,
@@ -86,6 +89,23 @@ class TileMap:
                             self.tiles[ny][nx] = S.CRYSTAL
                             self.crystal[ny][nx] = S.CRYSTAL_PER_TILE
 
+    def _place_isotope_vents(self, count):
+        """Place isotope deposits: 2x2 clusters, mid-map bias."""
+        for _ in range(count):
+            x = random.randint(30, self.width - 31)
+            y = random.randint(30, self.height - 31)
+            for dy in range(2):
+                for dx in range(2):
+                    nx, ny = x + dx, y + dy
+                    if (
+                        0 <= nx < self.width
+                        and 0 <= ny < self.height
+                        and self.tiles[ny][nx] == S.GRASS
+                    ):
+                        if random.random() < 0.6:
+                            self.tiles[ny][nx] = S.ISOTOPE
+                            self.isotope[ny][nx] = S.ISOTOPE_PER_TILE
+
     def _clear_starting_area(self, sx, sy):
         """Clear a 5x5 area for base placement."""
         for dy in range(5):
@@ -94,6 +114,7 @@ class TileMap:
                 if 0 <= nx < self.width and 0 <= ny < self.height:
                     self.tiles[ny][nx] = S.GRASS
                     self.crystal[ny][nx] = 0
+                    self.isotope[ny][nx] = 0
 
     def is_passable(self, tx, ty):
         if 0 <= tx < self.width and 0 <= ty < self.height:

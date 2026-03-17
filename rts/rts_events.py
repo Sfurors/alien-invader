@@ -15,6 +15,7 @@ BUILD_KEYS = {
     pygame.K_2: "barracks",
     pygame.K_3: "turret",
     pygame.K_4: "mining_camp",
+    pygame.K_5: "isotope_extractor",
 }
 
 
@@ -69,6 +70,8 @@ def _handle_keydown(event, rts_ctx, state):
             u.attack_target = None
             u.harvesting = False
             u.returning = False
+            u.build_target = None
+            u.building = False
     elif key == pygame.K_b:
         # Enter build mode — need a subsequent number key
         pass
@@ -78,7 +81,12 @@ def _handle_keydown(event, rts_ctx, state):
         if can_build_any:
             btype = BUILD_KEYS[key]
             bdef = BUILDING_DEFS[btype]
-            if bdef["faction"] == "human" and state.crystals >= bdef["cost"]:
+            cost = bdef["cost"]
+            if (
+                bdef["faction"] == "human"
+                and state.crystals >= cost["crystals"]
+                and state.isotope >= cost["isotope"]
+            ):
                 state.build_mode = btype
     elif key == pygame.K_F6:
         # Cheat: skip to RTS (already in RTS, ignore)
@@ -89,16 +97,18 @@ def _handle_keydown(event, rts_ctx, state):
             building = state.selected_building
             unit_type = building.produces[0]
             cost = UNIT_DEFS[unit_type]["cost"]
-            if state.crystals >= cost:
-                state.crystals -= cost
+            if state.crystals >= cost["crystals"] and state.isotope >= cost["isotope"]:
+                state.crystals -= cost["crystals"]
+                state.isotope -= cost["isotope"]
                 building.start_production(unit_type)
     elif key == pygame.K_o:
         if state.selected_building and len(state.selected_building.produces) > 1:
             building = state.selected_building
             unit_type = building.produces[1]
             cost = UNIT_DEFS[unit_type]["cost"]
-            if state.crystals >= cost:
-                state.crystals -= cost
+            if state.crystals >= cost["crystals"] and state.isotope >= cost["isotope"]:
+                state.crystals -= cost["crystals"]
+                state.isotope -= cost["isotope"]
                 building.start_production(unit_type)
     return None
 
@@ -250,6 +260,10 @@ def _right_click_command(rts_ctx, state, fog, mx, my):
         rts_ctx.tile_map.tiles[ty][tx] == S.CRYSTAL
         and rts_ctx.tile_map.crystal[ty][tx] > 0
     )
+    is_isotope = (
+        rts_ctx.tile_map.tiles[ty][tx] == S.ISOTOPE
+        and rts_ctx.tile_map.isotope[ty][tx] > 0
+    )
 
     # Check if clicking on own building (for miner deposit / camp assign)
     target_friendly_building = None
@@ -270,15 +284,32 @@ def _right_click_command(rts_ctx, state, fog, mx, my):
             if path:
                 unit.set_move_target(path)
                 unit.attack_target = target_enemy
+        elif (
+            target_friendly_building
+            and target_friendly_building.under_construction
+            and unit.can_build
+        ):
+            # Send engineer to resume construction
+            fb = target_friendly_building
+            dest = _find_adjacent_tile(fb, unit, rts_ctx.tile_map, occupied)
+            if dest:
+                path = find_path(
+                    rts_ctx.tile_map, (unit.tile_x, unit.tile_y), dest, occupied
+                )
+                if path:
+                    unit.set_move_target(path)
+                    unit.build_target = fb
+                    unit.building = True
         elif target_friendly_building and unit.can_harvest:
             fb = target_friendly_building
             if fb.is_mining_camp:
                 # Assign miner to mining camp
                 unit.assigned_camp = fb
+                unit.assigned_isotope_camp = None
+                unit.harvest_resource_type = "crystal"
                 unit.harvesting = False
                 unit.returning = False
                 unit.harvest_timer = 0
-                # Walk to camp
                 dest = _find_adjacent_tile(fb, unit, rts_ctx.tile_map, occupied)
                 if dest:
                     path = find_path(
@@ -286,7 +317,22 @@ def _right_click_command(rts_ctx, state, fog, mx, my):
                     )
                     if path:
                         unit.set_move_target(path)
-            elif unit.carrying > 0:
+            elif fb.is_isotope_camp:
+                # Assign miner to isotope camp
+                unit.assigned_isotope_camp = fb
+                unit.assigned_camp = None
+                unit.harvest_resource_type = "isotope"
+                unit.harvesting = False
+                unit.returning = False
+                unit.harvest_timer = 0
+                dest = _find_adjacent_tile(fb, unit, rts_ctx.tile_map, occupied)
+                if dest:
+                    path = find_path(
+                        rts_ctx.tile_map, (unit.tile_x, unit.tile_y), dest, occupied
+                    )
+                    if path:
+                        unit.set_move_target(path)
+            elif unit.carrying > 0 or unit.carrying_isotope > 0:
                 # Deposit at base (partial or full)
                 unit.returning = True
                 unit.return_target = fb
@@ -302,12 +348,14 @@ def _right_click_command(rts_ctx, state, fog, mx, my):
                         unit.return_target = fb
                         unit.harvest_target = saved
         elif is_crystal and unit.can_harvest:
-            # Harvest command
+            # Harvest crystal command
             unit.harvest_target = (tx, ty)
+            unit.harvest_resource_type = "crystal"
             unit.harvesting = True
             unit.returning = False
             unit.harvest_timer = 0
             unit.assigned_camp = None
+            unit.assigned_isotope_camp = None
             path = find_path(
                 rts_ctx.tile_map, (unit.tile_x, unit.tile_y), (tx, ty), occupied
             )
@@ -315,6 +363,24 @@ def _right_click_command(rts_ctx, state, fog, mx, my):
                 unit.set_move_target(path)
                 unit.harvesting = True
                 unit.harvest_target = (tx, ty)
+                unit.harvest_resource_type = "crystal"
+        elif is_isotope and unit.can_harvest:
+            # Harvest isotope command
+            unit.harvest_target = (tx, ty)
+            unit.harvest_resource_type = "isotope"
+            unit.harvesting = True
+            unit.returning = False
+            unit.harvest_timer = 0
+            unit.assigned_camp = None
+            unit.assigned_isotope_camp = None
+            path = find_path(
+                rts_ctx.tile_map, (unit.tile_x, unit.tile_y), (tx, ty), occupied
+            )
+            if path:
+                unit.set_move_target(path)
+                unit.harvesting = True
+                unit.harvest_target = (tx, ty)
+                unit.harvest_resource_type = "isotope"
         else:
             # Move command
             path = find_path(
@@ -333,15 +399,42 @@ def _try_place_building(rts_ctx, state, mx, my):
     if not can_place_building(rts_ctx.tile_map, tx, ty, bdef["size"], rts_ctx):
         return
 
-    if state.crystals < bdef["cost"]:
+    cost = bdef["cost"]
+    if state.crystals < cost["crystals"] or state.isotope < cost["isotope"]:
         return
 
-    state.crystals -= bdef["cost"]
+    state.crystals -= cost["crystals"]
+    state.isotope -= cost["isotope"]
     building = BaseBuilding(btype, tx, ty, "human")
     building.under_construction = True
     building.tile_map = rts_ctx.tile_map
     rts_ctx.player_buildings.add(building)
     rts_ctx.all_entities.add(building)
+
+    # Auto-send selected engineers to build site
+    from .units import _find_adjacent_tile
+
+    occupied = set()
+    for b in rts_ctx.player_buildings:
+        for dy in range(b.size[1]):
+            for dx in range(b.size[0]):
+                occupied.add((b.tile_x + dx, b.tile_y + dy))
+    for b in rts_ctx.enemy_buildings:
+        for dy in range(b.size[1]):
+            for dx in range(b.size[0]):
+                occupied.add((b.tile_x + dx, b.tile_y + dy))
+
+    for unit in state.selected_units:
+        if unit.can_build:
+            dest = _find_adjacent_tile(building, unit, rts_ctx.tile_map, occupied)
+            if dest:
+                path = find_path(
+                    rts_ctx.tile_map, (unit.tile_x, unit.tile_y), dest, occupied
+                )
+                if path:
+                    unit.set_move_target(path)
+                    unit.build_target = building
+                    unit.building = True
 
     # Mark tiles as occupied in map (for pathfinding)
     state.cancel_build()

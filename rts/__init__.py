@@ -59,7 +59,9 @@ class RTSMode:
             font_scale=self.font_scale,
         )
 
-        self.state = RTSState(RTSSettings.STARTING_CRYSTALS)
+        self.state = RTSState(
+            RTSSettings.STARTING_CRYSTALS, RTSSettings.STARTING_ISOTOPE
+        )
         self.fog = FogOfWar()
         self.minimap = Minimap()
         self.ai = LizardAI()
