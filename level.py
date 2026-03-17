@@ -16,6 +16,10 @@ def advance_level(ctx):
     ctx.stats.level_transition_timer = TRANSITION_FRAMES
     ctx.sounds["level_up"].play()
 
+    import save_manager
+
+    save_manager.unlock_next_level(ctx.stats.level)
+
     if ctx.stats.level <= 3:
         ctx.settings.apply_level(ctx.stats.level)
         fleet_module.create_fleet(ctx)

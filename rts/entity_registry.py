@@ -19,7 +19,7 @@ UNIT_DEFS = {
     },
     "miner": {
         "faction": "human",
-        "hp": 25,
+        "hp": 35,
         "speed": 1.2,
         "attack": 0,
         "attack_range": 0,
@@ -35,7 +35,7 @@ UNIT_DEFS = {
     },
     "marine": {
         "faction": "human",
-        "hp": 50,
+        "hp": 60,
         "speed": 1.8,
         "attack": 6,
         "attack_range": 5,
@@ -136,8 +136,8 @@ BUILDING_DEFS = {
     },
     "turret": {
         "faction": "human",
-        "hp": 150,
-        "cost": {"crystals": 150, "isotope": 40},
+        "hp": 200,
+        "cost": {"crystals": 150, "isotope": 25},
         "size": (1, 1),
         "produces": [],
         "attack": 10,

@@ -17,6 +17,11 @@ pyrightconfig.json
 # Sound cache
 .sound_cache/
 
+# Save files
+save_chapter1.json
+save_chapter2.json
+progress.json
+
 # Claude Code local settings
 .claude/settings.local.json
 

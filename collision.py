@@ -106,6 +106,9 @@ def check_bullet_boss_collisions(ctx):
                 ctx.stats.game_active = False
                 ctx.sounds["boss_death"].play()
                 ctx.sounds["victory"].play()
+                import save_manager
+
+                save_manager.unlock_rts()
                 return
 
 

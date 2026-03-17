@@ -13,6 +13,13 @@ class GameStats:
             False  # False = show menu, True = show game-over after death
         )
         self.game_over_sound_played = False
+        self.paused = False
+
+        # Menu navigation
+        self.menu_cursor = 0
+        self.rts_submenu_active = False
+        self.rts_submenu_cursor = 0
+        self.rts_load_save = False
 
     def reset_stats(self):
         self.score = 0

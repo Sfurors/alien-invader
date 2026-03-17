@@ -433,6 +433,21 @@ def _draw_hud(
         rts_ctx.hud_manager.panel.draw(screen, rts_ctx.font_scale)
         rts_ctx.hud_manager.panel.draw_tooltip(screen, rts_ctx.font_scale)
 
+    # Save/load feedback overlay
+    if state.save_message and state.save_message_timer > 0:
+        msg_font = pygame.font.SysFont(
+            "consolas", max(16, int(28 * rts_ctx.font_scale)), bold=True
+        )
+        alpha = min(255, state.save_message_timer * 4)
+        msg_surf = msg_font.render(state.save_message, True, (0, 255, 100))
+        msg_rect = msg_surf.get_rect(center=(screen_w // 2, 40))
+        bg_surf = pygame.Surface(
+            (msg_rect.width + 20, msg_rect.height + 10), pygame.SRCALPHA
+        )
+        bg_surf.fill((0, 0, 0, min(180, alpha)))
+        screen.blit(bg_surf, (msg_rect.x - 10, msg_rect.y - 5))
+        screen.blit(msg_surf, msg_rect)
+
     # Game over / victory overlay
     if state.game_over:
         title_font = pygame.font.SysFont(
@@ -447,6 +462,40 @@ def _draw_hud(
         sub = font.render("Press ENTER to continue", True, (200, 200, 200))
         sr = sub.get_rect(center=(screen_w // 2, viewport_h // 2 + 50))
         screen.blit(sub, sr)
+
+
+def draw_pause_overlay(screen, rts_ctx):
+    """Draw translucent pause menu with RTS controls reference."""
+    from pause_ui import draw_pause_screen
+
+    sections = [
+        {
+            "title": "Unit Controls",
+            "entries": [
+                ("Left Click", "Select unit / building", (180, 180, 180)),
+                ("Right Click", "Move / Attack / Harvest", (180, 180, 180)),
+                ("Shift + Click", "Add to selection", (180, 180, 180)),
+                ("1-5", "Build (with engineer)", (180, 180, 180)),
+                ("P / O / I", "Produce units", (180, 180, 180)),
+                ("S", "Stop selected units", (180, 180, 180)),
+                ("T", "Toggle scout mode", (180, 180, 180)),
+                ("Arrow Keys", "Scroll camera", (180, 180, 180)),
+            ],
+        },
+        {
+            "title": "Menu",
+            "entries": [
+                ("ESC", "Resume game", (0, 220, 80)),
+                ("F5", "Save game", (80, 220, 255)),
+                ("F9", "Load game", (80, 220, 255)),
+                ("M", "Quit to main menu", (220, 180, 50)),
+                ("Q", "Quit game", (220, 50, 50)),
+            ],
+        },
+    ]
+
+    draw_pause_screen(screen, "PAUSED", sections, font_scale=rts_ctx.font_scale)
+    pygame.display.flip()
 
 
 _TILE_HINTS = {
