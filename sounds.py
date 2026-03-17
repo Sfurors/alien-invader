@@ -1212,6 +1212,9 @@ def load_sounds():
     # Try loading from cache first (instant)
     cached = _try_load_cache()
     if cached is not None:
+        for key in ("menu_melody", "level_music", "boss_music"):
+            if key in cached:
+                cached[key].set_volume(0.5)
         return cached
 
     # Generate everything from scratch (slow, only on first run or after changes)
@@ -1258,6 +1261,10 @@ def load_sounds():
     result["boss_music"] = boss_music
     for key, snd in sfx_mono.items():
         result[key] = _mono_to_stereo(snd)
+
+    # Reduce music volume by 50%
+    for key in ("menu_melody", "level_music", "boss_music"):
+        result[key].set_volume(0.5)
 
     # Cache for next run
     _save_cache(result)

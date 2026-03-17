@@ -151,6 +151,10 @@ def run_game():
                                 else:
                                     victory_cutscene.advance()
                 elif ctx.stats.chapter2_active:
+                    # Stop menu music when entering RTS mode
+                    if menu_music_playing:
+                        sounds["menu_melody"].stop()
+                        menu_music_playing = False
                     # RTS Mode — Chapter 2
                     if rts_mode is None:
                         rts_mode = RTSMode(
