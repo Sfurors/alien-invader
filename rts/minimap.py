@@ -1,5 +1,6 @@
 """Minimap renderer showing terrain, fog, units, and camera rect."""
 
+import math
 import pygame
 from .rts_settings import RTSSettings as S
 
@@ -14,6 +15,8 @@ class Minimap:
         self._terrain_cache = pygame.Surface((size, size))
         self._terrain_dirty = True
         self._draw_count = 0
+        # Screen rect (set during draw, used for click detection)
+        self.last_screen_rect = None
 
     def mark_dirty(self):
         """Call when fog or terrain changes to refresh the cached terrain."""
@@ -39,7 +42,7 @@ class Minimap:
                 pygame.draw.rect(self._terrain_cache, color, (mx, my, pw, ph))
         self._terrain_dirty = False
 
-    def draw(self, screen, x, y, tile_map, fog, camera, rts_ctx):
+    def draw(self, screen, x, y, tile_map, fog, camera, rts_ctx, state=None):
         # Rebuild terrain cache every 10 frames (fog changes each frame)
         self._draw_count += 1
         if self._terrain_dirty or self._draw_count % 10 == 0:
@@ -77,6 +80,31 @@ class Minimap:
                 bh = max(2, int(b.size[1] * S.TILE_SIZE * self.scale_y))
                 pygame.draw.rect(self.surface, (255, 80, 30), (mx, my, bw, bh))
 
+        # Draw minimap alerts (scout seppuku pulsing red circles)
+        if state and state.minimap_alerts:
+            alert_duration = 180  # 3 seconds at 60fps
+            alive_alerts = []
+            for alert in state.minimap_alerts:
+                atx, aty, start_frame = alert
+                age = state.frame - start_frame
+                if age > alert_duration:
+                    continue
+                alive_alerts.append(alert)
+                # Pulsing radius via sin
+                base_radius = 4
+                pulse = math.sin(age * 0.15) * 2 + base_radius
+                radius = max(2, int(pulse))
+                # Fade alpha based on age
+                alpha = max(0, 255 - int(255 * age / alert_duration))
+                amx = int(atx * S.TILE_SIZE * self.scale_x)
+                amy = int(aty * S.TILE_SIZE * self.scale_y)
+                alert_surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+                pygame.draw.circle(
+                    alert_surf, (255, 40, 40, alpha), (radius, radius), radius
+                )
+                self.surface.blit(alert_surf, (amx - radius, amy - radius))
+            state.minimap_alerts = alive_alerts
+
         # Camera viewport rectangle
         cam_x = int(camera.x * self.scale_x)
         cam_y = int(camera.y * self.scale_y)
@@ -87,3 +115,15 @@ class Minimap:
         # Blit to screen
         screen.blit(self.surface, (x, y))
         pygame.draw.rect(screen, (100, 100, 100), (x, y, self.size, self.size), 1)
+        self.last_screen_rect = pygame.Rect(x, y, self.size, self.size)
+
+    def minimap_to_world(self, click_x, click_y):
+        """Convert screen click position to (world_px, world_py, tile_x, tile_y)."""
+        r = self.last_screen_rect
+        local_x = click_x - r.x
+        local_y = click_y - r.y
+        world_px = local_x / self.scale_x
+        world_py = local_y / self.scale_y
+        tile_x = int(world_px // S.TILE_SIZE)
+        tile_y = int(world_py // S.TILE_SIZE)
+        return world_px, world_py, tile_x, tile_y

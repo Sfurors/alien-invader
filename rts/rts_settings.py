@@ -45,10 +45,10 @@ class RTSSettings:
     TURRET_RANGE = 6  # tiles
 
     # AI timing (frames at 60fps)
-    AI_BUILDUP_DURATION = 7200  # 120 seconds
-    AI_SCOUT_INTERVAL = 900  # 15 seconds
-    AI_ATTACK_INTERVAL = 10800  # 180 seconds
-    AI_PRODUCE_INTERVAL = 180  # 3 seconds
+    AI_BUILDUP_DURATION = 3600  # 60 seconds
+    AI_SCOUT_INTERVAL = 600  # 10 seconds
+    AI_ATTACK_INTERVAL = 5400  # 90 seconds
+    AI_PRODUCE_INTERVAL = 150  # 2.5 seconds
     AI_SUPPLY_DROP_INTERVAL = 2700  # 45 seconds
     AI_SUPPLY_DROP_AMOUNT = 100  # crystals per drop
 

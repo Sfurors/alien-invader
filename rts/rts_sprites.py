@@ -57,6 +57,23 @@ MARINE_MAP = [
     [0, 2, 0, 2, 0],
 ]
 
+SCOUT_HUMAN_PS = 3
+SCOUT_HUMAN_PALETTE = {
+    1: (200, 160, 120),  # skin
+    2: (40, 80, 50),  # dark green suit
+    3: (60, 110, 70),  # green suit
+    4: (50, 60, 50),  # helmet
+    5: (80, 80, 90),  # binoculars
+}
+SCOUT_HUMAN_MAP = [
+    [0, 4, 4, 4, 0],
+    [0, 4, 1, 4, 0],
+    [5, 5, 1, 0, 0],
+    [0, 3, 3, 3, 0],
+    [0, 2, 3, 2, 0],
+    [0, 2, 0, 2, 0],
+]
+
 MAIN_BASE_PS = 3
 MAIN_BASE_PALETTE = {
     1: (160, 160, 170),  # metal
@@ -327,6 +344,7 @@ def get_sprite_data(entity_type):
         "engineer": (ENGINEER_MAP, ENGINEER_PALETTE, ENGINEER_PS),
         "miner": (MINER_MAP, MINER_PALETTE, MINER_PS),
         "marine": (MARINE_MAP, MARINE_PALETTE, MARINE_PS),
+        "scout_human": (SCOUT_HUMAN_MAP, SCOUT_HUMAN_PALETTE, SCOUT_HUMAN_PS),
         "main_base": (MAIN_BASE_MAP, MAIN_BASE_PALETTE, MAIN_BASE_PS),
         "barracks": (BARRACKS_MAP, BARRACKS_PALETTE, BARRACKS_PS),
         "turret": (TURRET_MAP, TURRET_PALETTE, TURRET_PS),

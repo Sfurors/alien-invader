@@ -25,6 +25,9 @@ class RTSState:
         # Frame counter
         self.frame = 0
 
+        # Minimap alerts (scout seppuku locations)
+        self.minimap_alerts = []  # list of (tx, ty, start_frame)
+
     def clear_selection(self):
         for u in self.selected_units:
             u.selected = False

@@ -65,6 +65,10 @@ class BaseUnit(pygame.sprite.Sprite):
         self._normal_speed = self.speed
         self._normal_image = None  # set after _build_image
 
+        # Scout mode (human scout auto-explore)
+        self.scout_mode = False
+        self.scout_timer = 0
+
         # Damage tracking (frames since last hit, None = never hit)
         self.last_hit_frame = None
 
@@ -132,6 +136,7 @@ class BaseUnit(pygame.sprite.Sprite):
         self.harvest_timer = 0
         self.build_target = None
         self.building = False
+        self.scout_mode = False
 
     def distance_to_tile(self, tx, ty):
         dx = self.tile_x - tx
@@ -178,7 +183,7 @@ class BaseBuilding(pygame.sprite.Sprite):
         # Construction
         self.under_construction = False
         self.build_progress = 0
-        self.build_time = 180  # 3 seconds at 60fps
+        self.build_time = stats.get("build_time", 180)  # default 3s at 60fps
 
         # Production queue
         self.production_queue = []
