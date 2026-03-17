@@ -28,6 +28,13 @@ class RTSState:
         # Minimap alerts (scout seppuku locations)
         self.minimap_alerts = []  # list of (tx, ty, start_frame)
 
+        # Save/load feedback overlay
+        self.save_message = None  # e.g. "Game Saved" or "Game Loaded"
+        self.save_message_timer = 0
+
+        # Pause menu
+        self.paused = False
+
     def clear_selection(self):
         for u in self.selected_units:
             u.selected = False

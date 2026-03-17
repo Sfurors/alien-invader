@@ -161,7 +161,7 @@ def _enter_caravan_mode(unit, rts_ctx, occupied):
     unit._normal_speed = unit.speed
     unit._normal_image = unit.image
     unit.caravan_mode = True
-    unit.speed = unit._normal_speed / 3.0
+    unit.speed = unit._normal_speed * 0.7
 
     sprite_data = get_sprite_data("cart")
     if sprite_data:

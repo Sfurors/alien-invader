@@ -27,8 +27,8 @@ def handle_events(rts_ctx, state, fog):
 
         elif event.type == pygame.KEYDOWN:
             result = _handle_keydown(event, rts_ctx, state)
-            if result == "quit":
-                return "quit"
+            if result in ("quit", "save", "load", "pause"):
+                return result
 
         elif event.type == pygame.KEYUP:
             _handle_keyup(event, rts_ctx)
@@ -53,7 +53,8 @@ def _handle_keydown(event, rts_ctx, state):
         if state.build_mode:
             state.cancel_build()
         else:
-            state.clear_selection()
+            state.paused = True
+            return "pause"
     elif key == pygame.K_LEFT:
         rts_ctx.camera.scrolling_left = True
     elif key == pygame.K_RIGHT:
@@ -79,6 +80,10 @@ def _handle_keydown(event, rts_ctx, state):
             from .hud_manager import _do_enter_build_mode
 
             _do_enter_build_mode(BUILD_KEYS[key], state, rts_ctx)
+    elif key == pygame.K_F5:
+        return "save"
+    elif key == pygame.K_F9:
+        return "load"
     elif key == pygame.K_F6:
         # Cheat: skip to RTS (already in RTS, ignore)
         pass

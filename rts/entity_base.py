@@ -6,12 +6,32 @@ from .rts_settings import RTSSettings as S
 from .rts_sprites import get_sprite_data
 from .entity_registry import UNIT_DEFS, BUILDING_DEFS
 
+# Auto-incrementing entity ID counter for save/load cross-references
+_next_entity_id = 1
+
+
+def _gen_entity_id():
+    global _next_entity_id
+    eid = _next_entity_id
+    _next_entity_id += 1
+    return eid
+
+
+def _get_next_entity_id():
+    return _next_entity_id
+
+
+def _set_next_entity_id(value):
+    global _next_entity_id
+    _next_entity_id = value
+
 
 class BaseUnit(pygame.sprite.Sprite):
     """Generic unit driven by stats from entity_registry."""
 
-    def __init__(self, unit_type, tile_x, tile_y, faction="human"):
+    def __init__(self, unit_type, tile_x, tile_y, faction="human", _entity_id=None):
         super().__init__()
+        self.entity_id = _entity_id if _entity_id is not None else _gen_entity_id()
         self.unit_type = unit_type
         self.faction = faction
         stats = UNIT_DEFS[unit_type]
@@ -153,8 +173,9 @@ class BaseUnit(pygame.sprite.Sprite):
 class BaseBuilding(pygame.sprite.Sprite):
     """Generic building driven by stats from entity_registry."""
 
-    def __init__(self, building_type, tile_x, tile_y, faction="human"):
+    def __init__(self, building_type, tile_x, tile_y, faction="human", _entity_id=None):
         super().__init__()
+        self.entity_id = _entity_id if _entity_id is not None else _gen_entity_id()
         self.building_type = building_type
         self.faction = faction
         stats = BUILDING_DEFS[building_type]

@@ -17,6 +17,7 @@ import level as level_module
 from menu_animation import MenuAnimation
 from victory_cutscene import VictoryCutscene
 from rts import RTSMode
+import save_manager
 
 
 def run_game():
@@ -85,6 +86,8 @@ def run_game():
     victory_cutscene = None
     cutscene_sounds_played = False
     rts_mode = None
+    progress = save_manager.load_progress()
+    events_module.validate_menu_cursor(ctx.stats, progress)
 
     while True:
         clock.tick(60)
@@ -96,15 +99,24 @@ def run_game():
             if current_music is not None:
                 sounds[current_music].stop()
                 current_music = None
+                progress = save_manager.load_progress()
+                events_module.validate_menu_cursor(ctx.stats, progress)
             if not ctx.stats.game_started:
                 if not menu_music_playing:
                     sounds["menu_melody"].play(-1)
                     menu_music_playing = True
                 menu_anim.update()
                 renderer_module.draw_menu(
-                    screen, ai_settings, title_font, menu_font, bg, menu_anim
+                    screen,
+                    ai_settings,
+                    title_font,
+                    menu_font,
+                    bg,
+                    menu_anim,
+                    progress,
+                    ctx.stats,
                 )
-                events_module.check_events(ctx)
+                events_module.check_events(ctx, progress)
             elif ctx.stats.game_won:
                 if ctx.stats.victory_cutscene_active:
                     # Create cutscene on first frame
@@ -141,9 +153,22 @@ def run_game():
                 elif ctx.stats.chapter2_active:
                     # RTS Mode — Chapter 2
                     if rts_mode is None:
-                        rts_mode = RTSMode(screen, sounds, ai_settings.font_scale)
+                        rts_mode = RTSMode(
+                            screen,
+                            sounds,
+                            ai_settings.font_scale,
+                            load_save=ctx.stats.rts_load_save,
+                        )
                     result = rts_mode.update()
-                    if result == "done":
+                    if result == "menu":
+                        # Return to main menu
+                        ctx.stats.chapter2_active = False
+                        ctx.stats.game_won = False
+                        ctx.stats.game_started = False
+                        rts_mode = None
+                        progress = save_manager.load_progress()
+                        events_module.validate_menu_cursor(ctx.stats, progress)
+                    elif result == "done":
                         # Return to victory screen
                         ctx.stats.chapter2_active = False
                         rts_mode = None
@@ -151,12 +176,12 @@ def run_game():
                     renderer_module.draw_victory(
                         screen, ai_settings, ctx.stats, title_font, menu_font, bg
                     )
-                    events_module.check_events(ctx)
+                    events_module.check_events(ctx, progress)
             else:
                 renderer_module.draw_game_over(
-                    screen, ai_settings, title_font, menu_font, bg
+                    screen, ai_settings, title_font, menu_font, bg, ctx.stats
                 )
-                events_module.check_events(ctx)
+                events_module.check_events(ctx, progress)
         else:
             if menu_music_playing:
                 sounds["menu_melody"].stop()
@@ -172,7 +197,15 @@ def run_game():
                 sounds[wanted_music].play(-1)
                 current_music = wanted_music
 
-            events_module.check_events(ctx)
+            if ctx.stats.paused:
+                result = events_module.check_pause_events(ctx)
+                if result == "menu":
+                    progress = save_manager.load_progress()
+                    continue
+                renderer_module.draw_pause_menu(screen)
+                continue
+
+            events_module.check_events(ctx, progress)
 
             if ctx.stats.level_transition_timer > 0:
                 ctx.stats.level_transition_timer -= 1

@@ -5,7 +5,7 @@ from .rts_settings import RTSSettings as S
 
 
 class TileMap:
-    def __init__(self, width=S.MAP_WIDTH, height=S.MAP_HEIGHT, seed=None):
+    def __init__(self, width=S.MAP_WIDTH, height=S.MAP_HEIGHT, seed=None, spawns=None):
         self.width = width
         self.height = height
         # terrain type per tile
@@ -16,6 +16,7 @@ class TileMap:
         self.isotope = [[0] * width for _ in range(height)]
         if seed is not None:
             random.seed(seed)
+        self._spawns = spawns or [(2, 2), (self.width - 6, self.height - 6)]
         self._generate()
 
     def _generate(self):
@@ -24,11 +25,10 @@ class TileMap:
         self._place_sand_edges()
         self._place_crystals(60)
         self._place_isotope_vents(20)
-        self._clear_starting_area(2, 2)  # player corner
-        self._clear_starting_area(
-            self.width - 6,
-            self.height - 6,  # enemy corner
-        )
+        for sx, sy in self._spawns:
+            self._clear_starting_area(sx, sy)
+        for sx, sy in self._spawns:
+            self._place_starting_resources(sx, sy)
 
     def _place_rock_clusters(self, count):
         for _ in range(count):
@@ -105,6 +105,64 @@ class TileMap:
                         if random.random() < 0.6:
                             self.tiles[ny][nx] = S.ISOTOPE
                             self.isotope[ny][nx] = S.ISOTOPE_PER_TILE
+
+    def _place_starting_resources(self, sx, sy):
+        """Place guaranteed crystal and isotope clusters near a base at (sx, sy)."""
+        # Choose direction away from nearest map edge for cluster placement
+        cx, cy = sx + 2, sy + 2  # base center (5x5 cleared area)
+
+        # Crystal cluster: 6-8 tiles within 6-10 tiles of base center
+        for attempt in range(20):
+            dx = random.randint(-10, 10)
+            dy = random.randint(-10, 10)
+            dist = abs(dx) + abs(dy)
+            if dist < 6 or dist > 10:
+                continue
+            ox, oy = cx + dx, cy + dy
+            if not (2 <= ox < self.width - 2 and 2 <= oy < self.height - 2):
+                continue
+            # Check that area is mostly grass
+            placed = 0
+            for j in range(-1, 2):
+                for i in range(-1, 2):
+                    nx, ny = ox + i, oy + j
+                    if (
+                        0 <= nx < self.width
+                        and 0 <= ny < self.height
+                        and self.tiles[ny][nx] == S.GRASS
+                    ):
+                        if random.random() < 0.8 and placed < 8:
+                            self.tiles[ny][nx] = S.CRYSTAL
+                            self.crystal[ny][nx] = S.CRYSTAL_PER_TILE
+                            placed += 1
+            if placed >= 6:
+                break
+
+        # Isotope cluster: 3-4 tiles within 10-14 tiles of base center
+        for attempt in range(20):
+            dx = random.randint(-14, 14)
+            dy = random.randint(-14, 14)
+            dist = abs(dx) + abs(dy)
+            if dist < 10 or dist > 14:
+                continue
+            ox, oy = cx + dx, cy + dy
+            if not (2 <= ox < self.width - 2 and 2 <= oy < self.height - 2):
+                continue
+            placed = 0
+            for j in range(2):
+                for i in range(2):
+                    nx, ny = ox + i, oy + j
+                    if (
+                        0 <= nx < self.width
+                        and 0 <= ny < self.height
+                        and self.tiles[ny][nx] == S.GRASS
+                    ):
+                        if placed < 4:
+                            self.tiles[ny][nx] = S.ISOTOPE
+                            self.isotope[ny][nx] = S.ISOTOPE_PER_TILE
+                            placed += 1
+            if placed >= 3:
+                break
 
     def _clear_starting_area(self, sx, sy):
         """Clear a 5x5 area for base placement."""

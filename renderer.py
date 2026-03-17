@@ -73,50 +73,122 @@ def draw_rocket_hud(screen, stats, font):
     screen.blit(count_img, count_rect)
 
 
-def draw_menu(screen, ai_settings, title_font, menu_font, bg=None, menu_anim=None):
+def draw_menu(
+    screen,
+    ai_settings,
+    title_font,
+    menu_font,
+    bg=None,
+    menu_anim=None,
+    progress=None,
+    stats=None,
+):
+    from events import MENU_ITEMS, RTS_SUBMENU_ITEMS
+    import save_manager
+
+    if progress is None:
+        progress = save_manager.load_progress()
+
     screen.fill(ai_settings.bg_color)
     if bg is not None:
         bg.draw(screen)
     screen_rect = screen.get_rect()
+    cx = screen_rect.centerx
+    fs = ai_settings.font_scale
 
     if menu_anim is not None:
         menu_anim.draw(screen)
 
     title = title_font.render("ALIEN INVASION", True, (0, 220, 80))
-    title_rect = title.get_rect(center=(screen_rect.centerx, screen_rect.centery - 80))
-
-    prompt = menu_font.render("Press ENTER to Play", True, (200, 200, 200))
-    prompt_rect = prompt.get_rect(
-        center=(screen_rect.centerx, screen_rect.centery + 20)
-    )
-
-    quit_hint = menu_font.render("Q to Quit", True, (150, 150, 150))
-    quit_rect = quit_hint.get_rect(
-        center=(screen_rect.centerx, screen_rect.centery + 70)
-    )
-
+    title_rect = title.get_rect(center=(cx, screen_rect.centery - 80))
     screen.blit(title, title_rect)
-    screen.blit(prompt, prompt_rect)
-    screen.blit(quit_hint, quit_rect)
+
+    item_font = pygame.font.SysFont("consolas", max(14, int(24 * fs)))
+    small_font = pygame.font.SysFont("consolas", max(12, int(18 * fs)))
+    line_h = int(36 * fs)
+    start_y = screen_rect.centery + 10
+
+    if stats is not None and stats.rts_submenu_active:
+        # RTS sub-menu
+        header = item_font.render("RTS Mode", True, (0, 220, 80))
+        screen.blit(header, header.get_rect(center=(cx, start_y - line_h)))
+
+        has_save = save_manager.has_chapter2_save()
+        for i, (label, action) in enumerate(RTS_SUBMENU_ITEMS):
+            if action == "rts_load" and not has_save:
+                color = (60, 60, 60)
+            elif stats.rts_submenu_cursor == i:
+                color = (0, 220, 80)
+                label = "> " + label
+            else:
+                color = (200, 200, 200)
+            surf = item_font.render(label, True, color)
+            screen.blit(surf, surf.get_rect(center=(cx, start_y + i * line_h)))
+
+        hint = small_font.render("ESC to go back", True, (120, 120, 120))
+        screen.blit(
+            hint,
+            hint.get_rect(center=(cx, start_y + len(RTS_SUBMENU_ITEMS) * line_h + 20)),
+        )
+    else:
+        # Main menu item list
+        max_level = progress.get("max_unlocked_level", 1)
+        rts_unlocked = progress.get("rts_unlocked", False)
+        cursor = stats.menu_cursor if stats else 0
+
+        for i, (label, _action_type, _action_value) in enumerate(MENU_ITEMS):
+            if i < 4:
+                unlocked = max_level >= (i + 1)
+            else:
+                unlocked = rts_unlocked
+
+            if not unlocked:
+                color = (60, 60, 60)
+                display = label + "  (locked)"
+            elif cursor == i:
+                color = (0, 220, 80)
+                display = "> " + label
+            else:
+                color = (200, 200, 200)
+                display = label
+
+            surf = item_font.render(display, True, color)
+            screen.blit(surf, surf.get_rect(center=(cx, start_y + i * line_h)))
+
+        quit_y = start_y + len(MENU_ITEMS) * line_h + 20
+        quit_hint = small_font.render("Q to Quit", True, (120, 120, 120))
+        screen.blit(quit_hint, quit_hint.get_rect(center=(cx, quit_y)))
+
     pygame.display.flip()
 
 
-def draw_game_over(screen, ai_settings, title_font, menu_font, bg=None):
+def draw_game_over(screen, ai_settings, title_font, menu_font, bg=None, stats=None):
     screen.fill(ai_settings.bg_color)
     if bg is not None:
         bg.draw(screen)
     screen_rect = screen.get_rect()
+    cx = screen_rect.centerx
 
     over = title_font.render("GAME OVER", True, (220, 50, 50))
-    over_rect = over.get_rect(center=(screen_rect.centerx, screen_rect.centery - 60))
-
-    prompt = menu_font.render("Press ENTER to Restart", True, (200, 200, 200))
-    prompt_rect = prompt.get_rect(
-        center=(screen_rect.centerx, screen_rect.centery + 20)
-    )
-
+    over_rect = over.get_rect(center=(cx, screen_rect.centery - 80))
     screen.blit(over, over_rect)
-    screen.blit(prompt, prompt_rect)
+
+    if stats is not None:
+        score_text = menu_font.render(f"Score: {stats.score}", True, (200, 200, 200))
+        score_rect = score_text.get_rect(center=(cx, screen_rect.centery - 20))
+        screen.blit(score_text, score_rect)
+
+        lvl = stats.level
+        prompt = menu_font.render(
+            f"Press ENTER to Retry Level {lvl}", True, (0, 220, 80)
+        )
+        prompt_rect = prompt.get_rect(center=(cx, screen_rect.centery + 30))
+        screen.blit(prompt, prompt_rect)
+
+    menu_hint = menu_font.render("M for Main Menu", True, (180, 180, 180))
+    menu_rect = menu_hint.get_rect(center=(cx, screen_rect.centery + 70))
+    screen.blit(menu_hint, menu_rect)
+
     pygame.display.flip()
 
 
@@ -190,6 +262,34 @@ def draw_boss_hp_bar(screen, boss_group):
         hp_w = int(bar_w * boss.hp / boss.max_hp)
         pygame.draw.rect(screen, (220, 30, 30), (bar_x, bar_y, hp_w, bar_h))
         pygame.draw.rect(screen, (255, 255, 255), (bar_x, bar_y, bar_w, bar_h), 1)
+
+
+def draw_pause_menu(screen):
+    """Draw a translucent pause overlay with controls reference."""
+    from pause_ui import draw_pause_screen
+
+    sections = [
+        {
+            "title": "Controls",
+            "entries": [
+                ("Arrow Keys", "Move ship", (180, 180, 180)),
+                ("Space", "Fire bullet", (180, 180, 180)),
+                ("B", "Fire / Detonate rocket", (180, 180, 180)),
+            ],
+        },
+        {
+            "title": "Menu",
+            "entries": [
+                ("ESC", "Resume game", (0, 220, 80)),
+                ("M", "Quit to main menu", (220, 180, 50)),
+                ("Q", "Quit game", (220, 50, 50)),
+            ],
+        },
+    ]
+
+    font_scale = screen.get_rect().width / 768
+    draw_pause_screen(screen, "PAUSED", sections, font_scale=font_scale)
+    pygame.display.flip()
 
 
 def update_screen(ctx, font, hint_font):

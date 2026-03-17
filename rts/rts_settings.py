@@ -36,21 +36,21 @@ class RTSSettings:
     MINIMAP_SIZE = 120
 
     # Economy
-    STARTING_CRYSTALS = 200
+    STARTING_CRYSTALS = 250
     STARTING_ISOTOPE = 0
-    AI_STARTING_ISOTOPE = 50
+    AI_STARTING_ISOTOPE = 25
 
     # Combat
     ATTACK_COOLDOWN = 30  # frames between attacks
     TURRET_RANGE = 6  # tiles
 
     # AI timing (frames at 60fps)
-    AI_BUILDUP_DURATION = 3600  # 60 seconds
+    AI_BUILDUP_DURATION = 5400  # 90 seconds
     AI_SCOUT_INTERVAL = 600  # 10 seconds
-    AI_ATTACK_INTERVAL = 5400  # 90 seconds
+    AI_ATTACK_INTERVAL = 7200  # 120 seconds
     AI_PRODUCE_INTERVAL = 150  # 2.5 seconds
-    AI_SUPPLY_DROP_INTERVAL = 2700  # 45 seconds
-    AI_SUPPLY_DROP_AMOUNT = 100  # crystals per drop
+    AI_SUPPLY_DROP_INTERVAL = 4800  # 80 seconds
+    AI_SUPPLY_DROP_AMOUNT = 75  # crystals per drop
 
     # Production
     PRODUCTION_TIME = 180  # frames (3 seconds)
@@ -65,6 +65,19 @@ class RTSSettings:
     FOG_VISIBLE = 2
     UNIT_VISION_RANGE = 5
     BUILDING_VISION_RANGE = 7
+
+    # Spawn points for randomized starting positions
+    SPAWN_POINTS = [
+        (3, 3),  # top-left
+        (93, 3),  # top-center
+        (183, 3),  # top-right
+        (3, 93),  # mid-left
+        (183, 93),  # mid-right
+        (3, 183),  # bottom-left
+        (93, 183),  # bottom-center
+        (183, 183),  # bottom-right
+    ]
+    MIN_SPAWN_DISTANCE = 80  # minimum Manhattan distance between bases
 
     # Terrain colors
     TERRAIN_COLORS = {
