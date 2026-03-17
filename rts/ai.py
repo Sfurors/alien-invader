@@ -48,13 +48,17 @@ class LizardAI:
             if self.frame - self.last_attack_frame >= S.AI_ATTACK_INTERVAL:
                 self.state = self.ATTACK
         elif self.state == self.ATTACK:
-            # After sending attack, go back to scout
+            # Stay in attack until all military units are idle (arrived or dead)
             military = [u for u in rts_ctx.enemy_units if u.attack_power > 0]
             if not military:
                 self.state = self.BUILDUP
             else:
-                self.state = self.SCOUT
-                self.last_attack_frame = self.frame
+                all_idle = all(
+                    not u.moving and u.attack_target is None for u in military
+                )
+                if all_idle:
+                    self.state = self.SCOUT
+                    self.last_attack_frame = self.frame
         elif self.state == self.DEFEND:
             # Check if threat is gone
             threat = self._find_threat(rts_ctx)
@@ -389,29 +393,38 @@ class LizardAI:
         tx, ty = target
         occupied = self._get_occupied(rts_ctx)
         for unit in rts_ctx.enemy_units:
-            if unit.attack_power > 0 and not unit.moving:
+            if unit.attack_power <= 0:
+                continue
+            # Skip units already fighting
+            if unit.attack_target is not None and unit.attack_target.alive():
+                continue
+            if not unit.moving:
                 path = find_path(
                     rts_ctx.tile_map, (unit.tile_x, unit.tile_y), (tx, ty), occupied
                 )
                 if path:
                     unit.set_move_target(path)
-                    best = None
-                    best_dist = float("inf")
-                    for pu in rts_ctx.player_units:
-                        d = unit.distance_to_tile(pu.tile_x, pu.tile_y)
-                        if d < best_dist:
-                            best_dist = d
-                            best = pu
-                    for pb in rts_ctx.player_buildings:
-                        cx, cy = pb.center_tile()
-                        d = unit.distance_to_tile(cx, cy)
-                        if d < best_dist:
-                            best_dist = d
-                            best = pb
-                    unit.attack_target = best
+                # Find nearest player entity to target
+                best = None
+                best_dist = float("inf")
+                for pu in rts_ctx.player_units:
+                    d = unit.distance_to_tile(pu.tile_x, pu.tile_y)
+                    if d < best_dist:
+                        best_dist = d
+                        best = pu
+                for pb in rts_ctx.player_buildings:
+                    cx, cy = pb.center_tile()
+                    d = unit.distance_to_tile(cx, cy)
+                    if d < best_dist:
+                        best_dist = d
+                        best = pb
+                unit.attack_target = best
 
     def _retarget_idle(self, rts_ctx):
         """Give idle military units near enemies a new attack target."""
+        # Use wider search range during attack state
+        extra_range = 10 if self.state == self.ATTACK else 0
+
         for unit in rts_ctx.enemy_units:
             if unit.attack_power <= 0:
                 continue
@@ -419,21 +432,38 @@ class LizardAI:
                 continue
             if unit.moving:
                 continue
+            search_range = unit.vision + 1 + extra_range
             best = None
             best_dist = float("inf")
             for pu in rts_ctx.player_units:
                 d = unit.distance_to_tile(pu.tile_x, pu.tile_y)
-                if d <= unit.vision + 1 and d < best_dist:
+                if d <= search_range and d < best_dist:
                     best_dist = d
                     best = pu
             for pb in rts_ctx.player_buildings:
                 cx, cy = pb.center_tile()
                 d = unit.distance_to_tile(cx, cy)
-                if d <= unit.vision + 1 and d < best_dist:
+                if d <= search_range and d < best_dist:
                     best_dist = d
                     best = pb
             if best:
                 unit.attack_target = best
+                # Also path toward it if not already moving
+                if not unit.path:
+                    if hasattr(best, "center_tile"):
+                        tx, ty = best.center_tile()
+                    else:
+                        tx, ty = best.tile_x, best.tile_y
+                    occupied = self._get_occupied(rts_ctx)
+                    path = find_path(
+                        rts_ctx.tile_map,
+                        (unit.tile_x, unit.tile_y),
+                        (tx, ty),
+                        occupied,
+                    )
+                    if path:
+                        unit.set_move_target(path)
+                        unit.attack_target = best
 
     def _find_threat(self, rts_ctx):
         """Find location of threat: any enemy building or unit recently hit."""

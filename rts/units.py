@@ -1,5 +1,6 @@
 """Unit update logic: movement, combat, harvesting."""
 
+import random
 import pygame
 from .rts_settings import RTSSettings as S
 from .pathfinding import find_path
@@ -62,6 +63,10 @@ def _update_group(group, rts_ctx, state, occupied, faction):
         # Tick damage tracker
         if unit.last_hit_frame is not None:
             unit.last_hit_frame += 1
+
+        # Handle scout mode (before combat so seppuku takes priority)
+        if unit.unit_type == "scout_human" and unit.scout_mode:
+            _handle_scout_mode(unit, rts_ctx, state, occupied)
 
         # Handle building
         if unit.can_build and unit.building:
@@ -315,6 +320,70 @@ def _handle_isotope_camp_idle(unit, rts_ctx, state, occupied):
             unit.harvest_resource_type = "isotope"
 
 
+def _handle_scout_mode(unit, rts_ctx, state, occupied):
+    """Auto-explore fog and seppuku when spotting enemies."""
+    # Seppuku check: if any enemy unit/building within vision range, self-destruct
+    enemies = rts_ctx.enemy_units if unit.faction == "human" else rts_ctx.player_units
+    enemy_buildings = (
+        rts_ctx.enemy_buildings if unit.faction == "human" else rts_ctx.player_buildings
+    )
+    for e in enemies:
+        d = unit.distance_to_tile(e.tile_x, e.tile_y)
+        if d <= unit.vision + 1:
+            # Seppuku!
+            state.minimap_alerts.append((unit.tile_x, unit.tile_y, state.frame))
+            unit.kill()
+            return
+    for eb in enemy_buildings:
+        cx, cy = eb.center_tile()
+        d = unit.distance_to_tile(cx, cy)
+        if d <= unit.vision + 1:
+            state.minimap_alerts.append((unit.tile_x, unit.tile_y, state.frame))
+            unit.kill()
+            return
+
+    # Auto-explore: when idle, pick a random unexplored tile and path to it
+    unit.scout_timer += 1
+    if unit.path:
+        return  # still moving to a target
+
+    if unit.scout_timer < 60:
+        return  # throttle re-pathing
+    unit.scout_timer = 0
+
+    # Collect unexplored tiles within ~30 tiles
+    fog = rts_ctx.fog
+    candidates = []
+    cx, cy = unit.tile_x, unit.tile_y
+    search_range = 30
+    for ty in range(
+        max(0, cy - search_range), min(rts_ctx.tile_map.height, cy + search_range + 1)
+    ):
+        for tx in range(
+            max(0, cx - search_range),
+            min(rts_ctx.tile_map.width, cx + search_range + 1),
+        ):
+            if fog.state[ty][tx] == S.FOG_UNEXPLORED:
+                candidates.append((tx, ty))
+
+    if not candidates:
+        return  # everything explored
+
+    # Pick a random target from candidates (sample a few for performance)
+    sample = random.sample(candidates, min(10, len(candidates)))
+    for target in sample:
+        tx, ty = target
+        if not rts_ctx.tile_map.is_passable(tx, ty):
+            continue
+        path = find_path(
+            rts_ctx.tile_map, (unit.tile_x, unit.tile_y), (tx, ty), occupied
+        )
+        if path:
+            unit.set_move_target(path)
+            unit.scout_mode = True  # re-set since set_move_target clears it
+            return
+
+
 def _handle_build(unit, rts_ctx, occupied):
     """Engineer building logic: walk to site, then construct."""
     target = unit.build_target
@@ -552,6 +621,12 @@ def _handle_return(unit, rts_ctx, state, occupied):
                         )
                         rts_ctx.ai.isotope += amount
                         unit.carrying_isotope -= amount
+
+            # If still carrying resources (base full), wait at base in caravan mode
+            if unit.carrying > 0 or unit.carrying_isotope > 0:
+                unit.moving = False
+                unit.path = []
+                return
 
             _end_caravan(unit)
             unit.returning = False

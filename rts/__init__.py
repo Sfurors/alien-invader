@@ -15,6 +15,7 @@ from .fog import FogOfWar
 from .minimap import Minimap
 from .entity_base import BaseUnit, BaseBuilding
 from .ai import LizardAI
+from .hud_manager import HudManager
 from .landing_cutscene import LandingCutscene
 from . import rts_events
 from . import rts_logic
@@ -63,9 +64,12 @@ class RTSMode:
             RTSSettings.STARTING_CRYSTALS, RTSSettings.STARTING_ISOTOPE
         )
         self.fog = FogOfWar()
+        self.rts_ctx.fog = self.fog
         self.minimap = Minimap()
+        self.rts_ctx.minimap = self.minimap
         self.ai = LizardAI()
         self.rts_ctx.ai = self.ai
+        self.rts_ctx.hud_manager = HudManager()
 
         # Place player starting units and base
         self._setup_player()

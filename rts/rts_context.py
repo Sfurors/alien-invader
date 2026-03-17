@@ -26,5 +26,14 @@ class RTSContext:
     all_entities: pygame.sprite.Group = field(default_factory=pygame.sprite.Group)
     projectiles: pygame.sprite.Group = field(default_factory=pygame.sprite.Group)
 
+    # Fog of war reference (set after init)
+    fog: object = None
+
     # AI reference (set after init)
     ai: object = None
+
+    # Minimap reference (set after init)
+    minimap: object = None
+
+    # HUD manager (set after init)
+    hud_manager: object = None

@@ -4,7 +4,7 @@ import sys
 import pygame
 from .rts_settings import RTSSettings as S
 from .entity_base import BaseUnit, BaseBuilding
-from .entity_registry import BUILDING_DEFS, UNIT_DEFS
+from .entity_registry import BUILDING_DEFS
 from .pathfinding import find_path
 from .buildings import can_place_building
 
@@ -63,53 +63,38 @@ def _handle_keydown(event, rts_ctx, state):
     elif key == pygame.K_DOWN:
         rts_ctx.camera.scrolling_down = True
     elif key == pygame.K_s:
-        # Stop all selected units
-        for u in state.selected_units:
-            u.path = []
-            u.moving = False
-            u.attack_target = None
-            u.harvesting = False
-            u.returning = False
-            u.build_target = None
-            u.building = False
+        from .hud_manager import _do_stop
+
+        _do_stop(state)
+    elif key == pygame.K_t:
+        from .hud_manager import _do_scout_toggle
+
+        _do_scout_toggle(state)
     elif key == pygame.K_b:
         # Enter build mode — need a subsequent number key
         pass
     elif key in BUILD_KEYS:
-        # Check if any selected unit can build
         can_build_any = any(u.can_build for u in state.selected_units)
         if can_build_any:
-            btype = BUILD_KEYS[key]
-            bdef = BUILDING_DEFS[btype]
-            cost = bdef["cost"]
-            if (
-                bdef["faction"] == "human"
-                and state.crystals >= cost["crystals"]
-                and state.isotope >= cost["isotope"]
-            ):
-                state.build_mode = btype
+            from .hud_manager import _do_enter_build_mode
+
+            _do_enter_build_mode(BUILD_KEYS[key], state, rts_ctx)
     elif key == pygame.K_F6:
         # Cheat: skip to RTS (already in RTS, ignore)
         pass
     # Production hotkeys: P to produce from selected building
     elif key == pygame.K_p:
-        if state.selected_building and state.selected_building.produces:
-            building = state.selected_building
-            unit_type = building.produces[0]
-            cost = UNIT_DEFS[unit_type]["cost"]
-            if state.crystals >= cost["crystals"] and state.isotope >= cost["isotope"]:
-                state.crystals -= cost["crystals"]
-                state.isotope -= cost["isotope"]
-                building.start_production(unit_type)
+        from .hud_manager import _do_produce
+
+        _do_produce(0, state)
     elif key == pygame.K_o:
-        if state.selected_building and len(state.selected_building.produces) > 1:
-            building = state.selected_building
-            unit_type = building.produces[1]
-            cost = UNIT_DEFS[unit_type]["cost"]
-            if state.crystals >= cost["crystals"] and state.isotope >= cost["isotope"]:
-                state.crystals -= cost["crystals"]
-                state.isotope -= cost["isotope"]
-                building.start_production(unit_type)
+        from .hud_manager import _do_produce
+
+        _do_produce(1, state)
+    elif key == pygame.K_i:
+        from .hud_manager import _do_produce
+
+        _do_produce(2, state)
     return None
 
 
@@ -129,8 +114,20 @@ def _handle_mouse_down(event, rts_ctx, state, fog):
     mx, my = event.pos
     viewport_h = rts_ctx.screen_h - S.HUD_HEIGHT
 
-    # Ignore clicks in HUD area
+    # Minimap click (inside HUD area)
+    minimap = rts_ctx.minimap
+    if (
+        minimap
+        and minimap.last_screen_rect
+        and minimap.last_screen_rect.collidepoint(mx, my)
+    ):
+        _handle_minimap_click(event.button, mx, my, minimap, rts_ctx, state)
+        return
+
+    # HUD area: route clicks to button panel
     if my >= viewport_h:
+        if event.button == 1 and rts_ctx.hud_manager:
+            rts_ctx.hud_manager.handle_click(mx, my, state, rts_ctx)
         return
 
     if event.button == 1:  # Left click
@@ -159,6 +156,9 @@ def _handle_mouse_up(event, rts_ctx, state, fog):
 
 def _handle_mouse_motion(event, rts_ctx, state):
     mx, my = event.pos
+    viewport_h = rts_ctx.screen_h - S.HUD_HEIGHT
+    if my >= viewport_h and rts_ctx.hud_manager:
+        rts_ctx.hud_manager.update_hover(mx, my)
     if state.box_selecting:
         state.box_end = (mx, my)
     if state.build_mode:
@@ -383,6 +383,41 @@ def _right_click_command(rts_ctx, state, fog, mx, my):
                 unit.harvest_resource_type = "isotope"
         else:
             # Move command
+            path = find_path(
+                rts_ctx.tile_map, (unit.tile_x, unit.tile_y), (tx, ty), occupied
+            )
+            if path:
+                unit.set_move_target(path)
+
+
+def _handle_minimap_click(button, mx, my, minimap, rts_ctx, state):
+    """Handle left/right click on the minimap."""
+    world_px, world_py, tx, ty = minimap.minimap_to_world(mx, my)
+
+    if not rts_ctx.tile_map.in_bounds(tx, ty):
+        return
+
+    if button == 1:
+        # Left-click: jump camera to location
+        rts_ctx.camera.center_on(world_px, world_py)
+
+    elif button == 3:
+        # Right-click: move selected units to location
+        state.cancel_build()
+        if not state.selected_units:
+            return
+
+        occupied = set()
+        for b in rts_ctx.player_buildings:
+            for dy in range(b.size[1]):
+                for dx in range(b.size[0]):
+                    occupied.add((b.tile_x + dx, b.tile_y + dy))
+        for b in rts_ctx.enemy_buildings:
+            for dy in range(b.size[1]):
+                for dx in range(b.size[0]):
+                    occupied.add((b.tile_x + dx, b.tile_y + dy))
+
+        for unit in state.selected_units:
             path = find_path(
                 rts_ctx.tile_map, (unit.tile_x, unit.tile_y), (tx, ty), occupied
             )

@@ -173,6 +173,13 @@ def _draw_units(screen, rts_ctx, camera, fog):
             center_sx, center_sy = camera.world_to_screen(unit.px, unit.py)
             pygame.draw.circle(screen, S.SELECTION_COLOR, (center_sx, center_sy), 12, 1)
 
+        # Scout mode indicator
+        if getattr(unit, "scout_mode", False):
+            center_sx, center_sy = camera.world_to_screen(unit.px, unit.py)
+            s_font = pygame.font.SysFont("consolas", 10, bold=True)
+            s_surf = s_font.render("S", True, (0, 255, 100))
+            screen.blit(s_surf, (center_sx + 8, center_sy - 14))
+
         # HP bar (only if damaged)
         if unit.hp < unit.max_hp:
             bar_sx = sx
@@ -334,7 +341,7 @@ def _draw_hud(
     mm_x = 8
     mm_y = hud_y + 8
     minimap_renderer.draw(
-        screen, mm_x, mm_y, rts_ctx.tile_map, fog, rts_ctx.camera, rts_ctx
+        screen, mm_x, mm_y, rts_ctx.tile_map, fog, rts_ctx.camera, rts_ctx, state
     )
 
     # Resource display
@@ -401,46 +408,30 @@ def _draw_hud(
             screen.blit(camp_text, (info_x, prod_y))
             prod_y += 16
 
-        if b.produces:
-            from .entity_registry import UNIT_DEFS as _UD
-
-            for i, utype in enumerate(b.produces):
-                cost = (
-                    _UD[utype]["cost"]
-                    if utype in _UD
-                    else {"crystals": 0, "isotope": 0}
-                )
-                hotkey = "P" if i == 0 else "O"
-                cost_str = f"{cost['crystals']}c"
-                if cost["isotope"] > 0:
-                    cost_str += f" {cost['isotope']}i"
-                prod_text = small_font.render(
-                    f"[{hotkey}] {utype} ({cost_str})", True, (180, 180, 200)
-                )
-                screen.blit(prod_text, (info_x, prod_y + i * 16))
-
         if b.production_queue:
             q_text = small_font.render(
                 f"Queue: {', '.join(b.production_queue)}", True, (150, 150, 200)
             )
-            screen.blit(q_text, (info_x, hud_y + 130))
+            screen.blit(q_text, (info_x, prod_y))
 
-    # Build mode hint
+    # Build mode hint (text label above buttons)
     if state.build_mode:
         hint = font.render(
-            f"Building: {state.build_mode} (ESC to cancel)", True, (255, 200, 0)
+            f"Placing: {state.build_mode.replace('_', ' ').title()}",
+            True,
+            (255, 200, 0),
         )
-        screen.blit(hint, (info_x, hud_y + 140))
-    else:
-        # Show build hints if engineer selected
-        has_engineer = any(u.can_build for u in state.selected_units)
-        if has_engineer:
-            hint = small_font.render(
-                "[1] Base  [2] Barracks  [3] Turret  [4] M.Camp  [5] Extractor",
-                True,
-                (150, 150, 150),
-            )
-            screen.blit(hint, (info_x, hud_y + 140))
+        screen.blit(hint, (info_x, hud_y + 130))
+
+    # HUD buttons (right side)
+    if rts_ctx.hud_manager:
+        rts_ctx.hud_manager.rebuild(state, rts_ctx, screen_w, viewport_h)
+        # Re-apply hover after rebuild (rebuild clears buttons)
+        mx, my = pygame.mouse.get_pos()
+        if my >= viewport_h:
+            rts_ctx.hud_manager.panel.update_hover(mx, my)
+        rts_ctx.hud_manager.panel.draw(screen, rts_ctx.font_scale)
+        rts_ctx.hud_manager.panel.draw_tooltip(screen, rts_ctx.font_scale)
 
     # Game over / victory overlay
     if state.game_over:
