@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git stash:*)",
+      "Bash(ls:*)",
+      "Bash(rm -f \"D:/PROJEKTY/alien_invasion/.claude/settings.local.json~Stashed changes\")",
+      "Bash(git checkout:*)"
+    ]
+  }
+}

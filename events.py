@@ -139,6 +139,8 @@ def check_keydown_events(event, ctx):
         _cheat_skip_to_cutscene(ctx)
     elif event.key == pygame.K_F6:
         _cheat_skip_to_rts(ctx)
+    elif event.key == pygame.K_F7:
+        _cheat_skip_to_dungeon(ctx)
 
 
 def _cheat_kill_all(ctx):
@@ -176,6 +178,22 @@ def _cheat_skip_to_rts(ctx):
     ctx.stats.game_won = True
     ctx.stats.victory_cutscene_active = False
     ctx.stats.chapter2_active = True
+    ctx.stats.game_active = False
+    ctx.ship.center()
+
+
+def _cheat_skip_to_dungeon(ctx):
+    ctx.aliens.empty()
+    ctx.bullets.empty()
+    ctx.drops.empty()
+    ctx.rockets.empty()
+    ctx.boss_group.empty()
+    ctx.boss_projectiles.empty()
+    ctx.stats.boss_active = False
+    ctx.stats.game_won = True
+    ctx.stats.victory_cutscene_active = False
+    ctx.stats.chapter2_active = False
+    ctx.stats.chapter3_active = True
     ctx.stats.game_active = False
     ctx.ship.center()
 

@@ -7,6 +7,7 @@ class GameStats:
         self.game_won = False
         self.victory_cutscene_active = False
         self.chapter2_active = False
+        self.chapter3_active = False
         self.level_transition_timer = 0
         self.game_active = False
         self.game_started = (
@@ -29,5 +30,6 @@ class GameStats:
         self.game_won = False
         self.victory_cutscene_active = False
         self.chapter2_active = False
+        self.chapter3_active = False
         self.level_transition_timer = 0
         self.game_over_sound_played = False

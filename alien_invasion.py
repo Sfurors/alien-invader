@@ -17,6 +17,7 @@ import level as level_module
 from menu_animation import MenuAnimation
 from victory_cutscene import VictoryCutscene
 from rts import RTSMode
+from dungeon import DungeonMode
 import save_manager
 
 
@@ -86,6 +87,7 @@ def run_game():
     victory_cutscene = None
     cutscene_sounds_played = False
     rts_mode = None
+    dungeon_mode = None
     progress = save_manager.load_progress()
     events_module.validate_menu_cursor(ctx.stats, progress)
 
@@ -150,6 +152,26 @@ def run_game():
                                     sounds["comm_open"].play()
                                 else:
                                     victory_cutscene.advance()
+                elif ctx.stats.chapter3_active:
+                    # Dungeon Mode — Chapter 3
+                    if menu_music_playing:
+                        sounds["menu_melody"].stop()
+                        menu_music_playing = False
+                    if dungeon_mode is None:
+                        dungeon_mode = DungeonMode(
+                            screen, sounds, ai_settings.font_scale
+                        )
+                    result = dungeon_mode.update()
+                    if result == "menu":
+                        ctx.stats.chapter3_active = False
+                        ctx.stats.game_won = False
+                        ctx.stats.game_started = False
+                        dungeon_mode = None
+                        progress = save_manager.load_progress()
+                        events_module.validate_menu_cursor(ctx.stats, progress)
+                    elif result == "done":
+                        ctx.stats.chapter3_active = False
+                        dungeon_mode = None
                 elif ctx.stats.chapter2_active:
                     # Stop menu music when entering RTS mode
                     if menu_music_playing:
@@ -173,8 +195,9 @@ def run_game():
                         progress = save_manager.load_progress()
                         events_module.validate_menu_cursor(ctx.stats, progress)
                     elif result == "done":
-                        # Return to victory screen
+                        # RTS complete — transition to dungeon (Chapter 3)
                         ctx.stats.chapter2_active = False
+                        ctx.stats.chapter3_active = True
                         rts_mode = None
                 else:
                     renderer_module.draw_victory(
