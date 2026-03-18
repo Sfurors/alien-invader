@@ -3,6 +3,7 @@
 import math
 import random
 from .dungeon_settings import DungeonSettings
+from .dungeon_projectile import DungeonProjectile
 from . import dungeon_map
 
 
@@ -43,7 +44,9 @@ class DungeonEnemy:
             self.alive = False
             self.death_timer = 20
 
-    def update(self, player, grid):
+    def update(self, ctx):
+        player = ctx.player
+        grid = ctx.grid
         if not self.alive:
             if self.death_timer > 0:
                 self.death_timer -= 1
@@ -59,21 +62,37 @@ class DungeonEnemy:
         dy = player.y - self.y
         dist = math.sqrt(dx * dx + dy * dy)
 
-        if dist < self.attack_range and self.attack_cooldown <= 0:
+        has_los = _has_line_of_sight(self.x, self.y, player.x, player.y, grid)
+
+        if dist < self.attack_range and self.attack_cooldown <= 0 and has_los:
             self.state = "attack"
-            self._attack(player)
-        elif dist < self.detect_range:
-            if _has_line_of_sight(self.x, self.y, player.x, player.y, grid):
-                self.state = "chase"
-                self._chase(dx, dy, dist, grid)
-            else:
-                self.state = "idle"
+            self._attack(ctx, dx, dy, dist)
+        elif dist < self.detect_range and has_los:
+            self.state = "chase"
+            self._chase(dx, dy, dist, grid)
         else:
             self.state = "idle"
 
-    def _attack(self, player):
-        player.take_damage(self.damage)
+    def _attack(self, ctx, dx, dy, dist):
+        """Fire a projectile toward the player."""
         self.attack_cooldown = self.attack_cooldown_max
+        if dist < 0.1:
+            return
+        angle = math.atan2(dy, dx)
+        # Slight inaccuracy so enemies aren't perfect shots
+        angle += random.uniform(-0.1, 0.1)
+        speed = DungeonSettings.ENEMY_PROJECTILE_SPEED
+        bullet = DungeonProjectile(
+            x=self.x,
+            y=self.y,
+            angle=angle,
+            pitch_offset=0.0,  # enemies shoot flat
+            speed=speed,
+            damage=self.damage,
+            color=self.color,
+            owner="enemy",
+        )
+        ctx.projectiles.append(bullet)
 
     def _chase(self, dx, dy, dist, grid):
         if dist < 0.1:

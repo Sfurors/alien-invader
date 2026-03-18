@@ -5,7 +5,7 @@ import math
 import random
 import pygame
 from .dungeon_settings import DungeonSettings
-from . import dungeon_map
+from .dungeon_projectile import DungeonProjectile
 
 
 def handle_events(ctx):
@@ -67,11 +67,20 @@ def _handle_movement(ctx):
 
 
 def _handle_mouse(ctx):
-    """Mouse look."""
+    """Mouse look — horizontal rotation and vertical pitch."""
     if not ctx.mouse_captured:
         return
-    rel_x, _ = pygame.mouse.get_rel()
+    rel_x, rel_y = pygame.mouse.get_rel()
     ctx.player.angle += rel_x * DungeonSettings.MOUSE_SENSITIVITY
+    # Scale mouse Y from screen pixels to render pixels so pitch
+    # behaves the same regardless of window size.
+    render_h = DungeonSettings.RENDER_HEIGHT - DungeonSettings.HUD_HEIGHT
+    scale_y = render_h / ctx.screen_h
+    ctx.player.pitch -= rel_y * scale_y * DungeonSettings.MOUSE_SENSITIVITY_Y
+    ctx.player.pitch = max(
+        -DungeonSettings.MAX_PITCH,
+        min(DungeonSettings.MAX_PITCH, ctx.player.pitch),
+    )
 
 
 def _handle_fire(ctx):
@@ -84,7 +93,7 @@ def _handle_fire(ctx):
 
 
 def _fire_weapon(ctx):
-    """Fire current weapon — hitscan ray check against enemies."""
+    """Fire current weapon — spawn projectile(s)."""
     player = ctx.player
     player.fire()
     ctx.fire_flash = 3
@@ -93,57 +102,22 @@ def _fire_weapon(ctx):
         ctx.sounds["shoot"].play()
 
     w_info = player.get_weapon_info()
+    # Bullets travel flat — the pitch rendering already makes them
+    # appear to originate from the crosshair direction.
+    speed = w_info.get("speed", DungeonSettings.PROJECTILE_SPEED)
+    vz = 0.0
 
     for _ in range(w_info["projectiles"]):
         spread = w_info["spread"]
         angle = player.angle + random.uniform(-spread, spread)
-        _hitscan(ctx, angle, w_info["damage"])
-
-
-def _hitscan(ctx, angle, damage):
-    """Cast a ray and damage the first enemy hit."""
-    player = ctx.player
-    cos_a = math.cos(angle)
-    sin_a = math.sin(angle)
-    max_dist = DungeonSettings.MAX_DEPTH
-
-    # Step along ray
-    step = 0.05
-    dist = 0.0
-    while dist < max_dist:
-        dist += step
-        rx = player.x + cos_a * dist
-        ry = player.y + sin_a * dist
-
-        # Check wall hit first
-        ix, iy = int(rx), int(ry)
-        if 0 <= iy < len(ctx.grid) and 0 <= ix < len(ctx.grid[0]):
-            if dungeon_map.is_wall(ctx.grid[iy][ix]):
-                return  # hit a wall
-        else:
-            return
-
-        # Check enemy hit
-        for enemy in ctx.enemies:
-            if not enemy.alive:
-                continue
-            edx = rx - enemy.x
-            edy = ry - enemy.y
-            if edx * edx + edy * edy < enemy.size * enemy.size:
-                enemy.take_damage(damage)
-                if not enemy.alive:
-                    player.score += enemy.points
-                    player.kills += 1
-                    # Drop loot
-                    if enemy.should_drop_loot():
-                        loot_type = enemy.get_loot()
-                        pickup_cfg = DungeonSettings.PICKUP_TYPES.get(loot_type, {})
-                        ctx.pickups.append(
-                            {
-                                "type": loot_type,
-                                "x": enemy.x,
-                                "y": enemy.y,
-                                "color": pickup_cfg.get("color", (200, 200, 200)),
-                            }
-                        )
-                return
+        bullet = DungeonProjectile(
+            x=player.x,
+            y=player.y,
+            angle=angle,
+            pitch_offset=vz,
+            speed=speed,
+            damage=w_info["damage"],
+            color=w_info["color"],
+            owner="player",
+        )
+        ctx.projectiles.append(bullet)

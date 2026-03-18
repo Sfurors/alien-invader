@@ -97,14 +97,16 @@ def _dda(px, py, sin_a, cos_a, grid, width, height):
     return v_dist, v_wall, True
 
 
-def render_frame(surface, player, grid, enemies, pickups):
+def render_frame(surface, player, grid, enemies, pickups, projectiles=None):
     """Render one frame of the raycasted view onto surface."""
     rw = DungeonSettings.RENDER_WIDTH
     rh = _RENDER_H
+    pitch = int(player.pitch)
 
-    # Clear: ceiling and floor
-    surface.fill(DungeonSettings.CEILING_COLOR, (0, 0, rw, rh // 2))
-    surface.fill(DungeonSettings.FLOOR_COLOR, (0, rh // 2, rw, rh // 2))
+    # Clear: ceiling and floor split at horizon (shifted by pitch)
+    horizon = rh // 2 + pitch
+    surface.fill(DungeonSettings.CEILING_COLOR, (0, 0, rw, max(0, horizon)))
+    surface.fill(DungeonSettings.FLOOR_COLOR, (0, max(0, horizon), rw, rh - max(0, horizon)))
 
     # Cast walls
     ray_data = cast_rays(player, grid)
@@ -113,8 +115,8 @@ def render_frame(surface, player, grid, enemies, pickups):
     for col, (dist, wall_type, is_vert) in enumerate(ray_data):
         if dist <= 0:
             dist = 0.001
-        wall_h = min(rh, int(_PROJ_DIST / dist))
-        y_offset = (rh - wall_h) // 2
+        wall_h = min(rh * 2, int(_PROJ_DIST / dist))
+        y_offset = (rh - wall_h) // 2 + pitch
 
         color = DungeonSettings.WALL_COLORS.get(wall_type, (100, 100, 100))
         # Darken vertical hits for depth shading
@@ -124,18 +126,25 @@ def render_frame(surface, player, grid, enemies, pickups):
         fog = max(0.2, 1.0 - dist / DungeonSettings.MAX_DEPTH)
         color = (int(color[0] * fog), int(color[1] * fog), int(color[2] * fog))
 
-        pygame.draw.line(surface, color, (col, y_offset), (col, y_offset + wall_h))
+        # Clamp draw to render area
+        draw_top = max(0, y_offset)
+        draw_bot = min(rh, y_offset + wall_h)
+        if draw_top < draw_bot:
+            pygame.draw.line(surface, color, (col, draw_top), (col, draw_bot))
         z_buffer.append(dist)
 
-    # Render sprites (enemies + pickups) as billboards
-    _render_sprites(surface, player, enemies, pickups, z_buffer)
+    # Render sprites (enemies + pickups + projectiles) as billboards
+    _render_sprites(surface, player, enemies, pickups, z_buffer,
+                    projectiles or [])
 
 
-def _render_sprites(surface, player, enemies, pickups, z_buffer):
-    """Render enemies and pickups as billboard sprites sorted by distance."""
+def _render_sprites(surface, player, enemies, pickups, z_buffer, projectiles):
+    """Render enemies, pickups, and projectiles as billboard sprites."""
     rw = DungeonSettings.RENDER_WIDTH
     rh = _RENDER_H
 
+    # (dist, angle, size, color, z_offset)
+    # z_offset: 0.0 = centered on horizon, positive = above horizon
     sprite_list = []
 
     for e in enemies:
@@ -145,7 +154,6 @@ def _render_sprites(surface, player, enemies, pickups, z_buffer):
         dy = e.y - player.y
         dist = math.sqrt(dx * dx + dy * dy)
         angle = math.atan2(dy, dx) - player.angle
-        # Normalize angle
         while angle > math.pi:
             angle -= 2 * math.pi
         while angle < -math.pi:
@@ -154,7 +162,7 @@ def _render_sprites(surface, player, enemies, pickups, z_buffer):
             color = e.color if e.alive else (80, 80, 80)
             if e.pain_timer > 0:
                 color = (255, 255, 255)
-            sprite_list.append((dist, angle, e.size, color, "enemy", e))
+            sprite_list.append((dist, angle, e.size, color, 0.0))
 
     for p in pickups:
         dx = p["x"] - player.x
@@ -166,22 +174,43 @@ def _render_sprites(surface, player, enemies, pickups, z_buffer):
         while angle < -math.pi:
             angle += 2 * math.pi
         if abs(angle) < _HALF_FOV + 0.2:
-            sprite_list.append((dist, angle, 0.25, p["color"], "pickup", p))
+            sprite_list.append((dist, angle, 0.25, p["color"], 0.0))
+
+    for proj in projectiles:
+        dx = proj.x - player.x
+        dy = proj.y - player.y
+        dist = math.sqrt(dx * dx + dy * dy)
+        angle = math.atan2(dy, dx) - player.angle
+        while angle > math.pi:
+            angle -= 2 * math.pi
+        while angle < -math.pi:
+            angle += 2 * math.pi
+        if abs(angle) < _HALF_FOV + 0.2:
+            # z_offset: how far above eye level (0.5) the bullet is
+            z_off = proj.z - 0.5
+            sprite_list.append((dist, angle, 0.1, proj.color, z_off))
 
     # Sort back to front
     sprite_list.sort(key=lambda s: -s[0])
 
-    for dist, angle, size, color, kind, obj in sprite_list:
+    pitch = int(player.pitch)
+    for dist, angle, size, color, z_offset in sprite_list:
         if dist < 0.1:
             continue
-        sprite_h = min(rh, int(_PROJ_DIST * size / dist))
+        sprite_h = min(rh * 2, int(_PROJ_DIST * size / dist))
         sprite_w = sprite_h
         screen_x = int(rw / 2 + angle * rw / (2 * _HALF_FOV)) - sprite_w // 2
-        screen_y = (rh - sprite_h) // 2
+        # z_offset shifts sprite up/down from horizon based on world height
+        z_screen_offset = int(z_offset * _PROJ_DIST / dist) if dist > 0 else 0
+        screen_y = (rh - sprite_h) // 2 + pitch - z_screen_offset
 
         # Draw column by column, checking z-buffer
+        draw_top = max(0, screen_y)
+        draw_bot = min(rh, screen_y + sprite_h)
+        if draw_top >= draw_bot:
+            continue
         for sx in range(max(0, screen_x), min(rw, screen_x + sprite_w)):
             if z_buffer[sx] > dist:
                 fog = max(0.2, 1.0 - dist / DungeonSettings.MAX_DEPTH)
                 c = (int(color[0] * fog), int(color[1] * fog), int(color[2] * fog))
-                pygame.draw.line(surface, c, (sx, screen_y), (sx, screen_y + sprite_h))
+                pygame.draw.line(surface, c, (sx, draw_top), (sx, draw_bot))

@@ -82,6 +82,7 @@ class DungeonMode:
             screen_h=self.screen_h,
             sounds=self.sounds,
             hud_font=hud_font,
+            projectiles=[],
             fire_flash=0,
             floor_complete=False,
             mouse_captured=False,

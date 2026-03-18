@@ -12,7 +12,8 @@ def draw_frame(screen, ctx):
     grid = ctx.grid
 
     # Render 3D view at low resolution
-    raycaster.render_frame(ctx.render_surface, player, grid, ctx.enemies, ctx.pickups)
+    raycaster.render_frame(ctx.render_surface, player, grid, ctx.enemies, ctx.pickups,
+                           ctx.projectiles)
 
     # Draw HUD bar at the bottom of the render surface
     _draw_hud(ctx.render_surface, ctx)

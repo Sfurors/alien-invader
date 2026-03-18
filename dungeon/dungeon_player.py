@@ -10,6 +10,7 @@ class DungeonPlayer:
         self.x = x + 0.5
         self.y = y + 0.5
         self.angle = 0.0  # radians, 0 = east
+        self.pitch = 0.0  # vertical look offset in render pixels
 
         self.hp = DungeonSettings.PLAYER_MAX_HP
         self.alive = True
