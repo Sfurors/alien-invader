@@ -21,11 +21,14 @@ def update(ctx):
     # Check pickup collisions
     _check_pickups(ctx)
 
-    # Check if player reached exit
-    px, py = int(ctx.player.x), int(ctx.player.y)
-    if 0 <= py < len(ctx.grid) and 0 <= px < len(ctx.grid[0]):
-        if ctx.grid[py][px] == dungeon_map.EXIT_TILE:
-            ctx.floor_complete = True
+    # Check if player reached exit (only active when all enemies are dead)
+    enemies_alive = any(e.alive for e in ctx.enemies)
+    ctx.exit_locked = enemies_alive
+    if not enemies_alive:
+        px, py = int(ctx.player.x), int(ctx.player.y)
+        if 0 <= py < len(ctx.grid) and 0 <= px < len(ctx.grid[0]):
+            if ctx.grid[py][px] == dungeon_map.EXIT_TILE:
+                ctx.floor_complete = True
 
     # Update fire flash
     if ctx.fire_flash > 0:

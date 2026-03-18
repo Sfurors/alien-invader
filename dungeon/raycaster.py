@@ -97,6 +97,15 @@ def _dda(px, py, sin_a, cos_a, grid, width, height):
     return v_dist, v_wall, True
 
 
+def _find_exit_pos(grid):
+    """Find the EXIT_TILE position in the grid, if any."""
+    for y, row in enumerate(grid):
+        for x, tile in enumerate(row):
+            if tile == dungeon_map.EXIT_TILE:
+                return (x + 0.5, y + 0.5)
+    return None
+
+
 def render_frame(surface, player, grid, enemies, pickups, projectiles=None):
     """Render one frame of the raycasted view onto surface."""
     rw = DungeonSettings.RENDER_WIDTH
@@ -133,20 +142,40 @@ def render_frame(surface, player, grid, enemies, pickups, projectiles=None):
             pygame.draw.line(surface, color, (col, draw_top), (col, draw_bot))
         z_buffer.append(dist)
 
-    # Render sprites (enemies + pickups + projectiles) as billboards
+    # Find exit position for rendering as a portal sprite
+    exit_pos = _find_exit_pos(grid)
+
+    # Render sprites (enemies + pickups + projectiles + exit portal) as billboards
     _render_sprites(surface, player, enemies, pickups, z_buffer,
-                    projectiles or [])
+                    projectiles or [], exit_pos)
 
 
-def _render_sprites(surface, player, enemies, pickups, z_buffer, projectiles):
-    """Render enemies, pickups, and projectiles as billboard sprites."""
+def _render_sprites(surface, player, enemies, pickups, z_buffer, projectiles,
+                     exit_pos=None):
+    """Render enemies, pickups, projectiles, and exit portal as billboard sprites."""
+    from .dungeon_sprites import get_enemy_sprite, get_pain_sprite, get_death_sprite
+
     rw = DungeonSettings.RENDER_WIDTH
     rh = _RENDER_H
 
-    # (dist, angle, size, color, z_offset)
-    # z_offset: 0.0 = centered on horizon, positive = above horizon
+    # Each entry: (dist, angle, size, color_or_None, z_offset, texture_or_None)
+    # color_or_None is used for simple sprites; texture_or_None for textured ones.
     sprite_list = []
 
+    # Exit portal — tall glowing column (simple color)
+    if exit_pos:
+        dx = exit_pos[0] - player.x
+        dy = exit_pos[1] - player.y
+        dist = math.sqrt(dx * dx + dy * dy)
+        angle = math.atan2(dy, dx) - player.angle
+        while angle > math.pi:
+            angle -= 2 * math.pi
+        while angle < -math.pi:
+            angle += 2 * math.pi
+        if abs(angle) < _HALF_FOV + 0.2:
+            sprite_list.append((dist, angle, 0.8, DungeonSettings.EXIT_COLOR, 0.0, None))
+
+    # Enemies — textured sprites
     for e in enemies:
         if not e.alive and e.death_timer <= 0:
             continue
@@ -159,11 +188,15 @@ def _render_sprites(surface, player, enemies, pickups, z_buffer, projectiles):
         while angle < -math.pi:
             angle += 2 * math.pi
         if abs(angle) < _HALF_FOV + 0.2:
-            color = e.color if e.alive else (80, 80, 80)
             if e.pain_timer > 0:
-                color = (255, 255, 255)
-            sprite_list.append((dist, angle, e.size, color, 0.0))
+                tex = get_pain_sprite()
+            elif not e.alive:
+                tex = get_death_sprite()
+            else:
+                tex = get_enemy_sprite(e.type)
+            sprite_list.append((dist, angle, e.size, None, 0.0, tex))
 
+    # Pickups — simple color
     for p in pickups:
         dx = p["x"] - player.x
         dy = p["y"] - player.y
@@ -174,8 +207,9 @@ def _render_sprites(surface, player, enemies, pickups, z_buffer, projectiles):
         while angle < -math.pi:
             angle += 2 * math.pi
         if abs(angle) < _HALF_FOV + 0.2:
-            sprite_list.append((dist, angle, 0.25, p["color"], 0.0))
+            sprite_list.append((dist, angle, 0.25, p["color"], 0.0, None))
 
+    # Projectiles — simple color
     for proj in projectiles:
         dx = proj.x - player.x
         dy = proj.y - player.y
@@ -186,31 +220,52 @@ def _render_sprites(surface, player, enemies, pickups, z_buffer, projectiles):
         while angle < -math.pi:
             angle += 2 * math.pi
         if abs(angle) < _HALF_FOV + 0.2:
-            # z_offset: how far above eye level (0.5) the bullet is
             z_off = proj.z - 0.5
-            sprite_list.append((dist, angle, 0.1, proj.color, z_off))
+            sprite_list.append((dist, angle, 0.1, proj.color, z_off, None))
 
     # Sort back to front
     sprite_list.sort(key=lambda s: -s[0])
 
     pitch = int(player.pitch)
-    for dist, angle, size, color, z_offset in sprite_list:
+    for dist, angle, size, color, z_offset, texture in sprite_list:
         if dist < 0.1:
             continue
         sprite_h = min(rh * 2, int(_PROJ_DIST * size / dist))
         sprite_w = sprite_h
         screen_x = int(rw / 2 + angle * rw / (2 * _HALF_FOV)) - sprite_w // 2
-        # z_offset shifts sprite up/down from horizon based on world height
         z_screen_offset = int(z_offset * _PROJ_DIST / dist) if dist > 0 else 0
         screen_y = (rh - sprite_h) // 2 + pitch - z_screen_offset
 
-        # Draw column by column, checking z-buffer
         draw_top = max(0, screen_y)
         draw_bot = min(rh, screen_y + sprite_h)
         if draw_top >= draw_bot:
             continue
-        for sx in range(max(0, screen_x), min(rw, screen_x + sprite_w)):
-            if z_buffer[sx] > dist:
-                fog = max(0.2, 1.0 - dist / DungeonSettings.MAX_DEPTH)
-                c = (int(color[0] * fog), int(color[1] * fog), int(color[2] * fog))
-                pygame.draw.line(surface, c, (sx, draw_top), (sx, draw_bot))
+
+        fog = max(0.2, 1.0 - dist / DungeonSettings.MAX_DEPTH)
+
+        if texture is not None:
+            # Textured sprite: scale, apply fog, blit column by column
+            scaled = pygame.transform.scale(texture, (sprite_w, sprite_h))
+            if fog < 0.95:
+                fog_surf = scaled.copy()
+                dark = pygame.Surface(scaled.get_size())
+                dark.fill((0, 0, 0))
+                dark.set_alpha(int((1.0 - fog) * 255))
+                fog_surf.blit(dark, (0, 0))
+                scaled = fog_surf
+            # Blit visible columns respecting z-buffer
+            left = max(0, screen_x)
+            right = min(rw, screen_x + sprite_w)
+            for sx in range(left, right):
+                if z_buffer[sx] <= dist:
+                    continue
+                tex_col = sx - screen_x
+                col_surf = scaled.subsurface((tex_col, 0, 1, sprite_h))
+                surface.blit(col_surf, (sx, screen_y),
+                             area=(0, draw_top - screen_y, 1, draw_bot - draw_top))
+        else:
+            # Simple colored sprite (pickups, projectiles, exit)
+            c = (int(color[0] * fog), int(color[1] * fog), int(color[2] * fog))
+            for sx in range(max(0, screen_x), min(rw, screen_x + sprite_w)):
+                if z_buffer[sx] > dist:
+                    pygame.draw.line(surface, c, (sx, draw_top), (sx, draw_bot))

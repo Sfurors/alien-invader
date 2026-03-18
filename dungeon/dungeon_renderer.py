@@ -44,7 +44,53 @@ def draw_frame(screen, ctx):
     pygame.draw.line(screen, (255, 255, 255), (cx - size, cy), (cx + size, cy))
     pygame.draw.line(screen, (255, 255, 255), (cx, cy - size), (cx, cy + size))
 
+    # Draw "EXIT" indicator when player is near the exit
+    _draw_exit_indicator(screen, ctx)
+
     pygame.display.flip()
+
+
+def _draw_exit_indicator(screen, ctx):
+    """Show a pulsing EXIT label when the player is close to the exit."""
+    import math as _math
+
+    grid = ctx.grid
+    player = ctx.player
+
+    # Find exit position
+    exit_pos = None
+    for y, row in enumerate(grid):
+        for x, tile in enumerate(row):
+            if tile == dungeon_map.EXIT_TILE:
+                exit_pos = (x + 0.5, y + 0.5)
+                break
+        if exit_pos:
+            break
+    if not exit_pos:
+        return
+
+    dx = exit_pos[0] - player.x
+    dy = exit_pos[1] - player.y
+    dist = _math.sqrt(dx * dx + dy * dy)
+
+    if dist > 6.0:
+        return
+
+    font_size = max(16, int(28 * ctx.screen_w / 768))
+    font = pygame.font.SysFont("consolas", font_size, bold=True)
+
+    locked = getattr(ctx, "exit_locked", False)
+    if locked:
+        color = (180, 50, 50)
+        text = "EXIT [CLEAR ALL ENEMIES]"
+    else:
+        pulse = int(180 + 75 * _math.sin(pygame.time.get_ticks() * 0.005))
+        color = (30, min(255, pulse), 50)
+        text = "EXIT"
+
+    label = font.render(text, True, color)
+    rect = label.get_rect(center=(ctx.screen_w // 2, ctx.screen_h // 5))
+    screen.blit(label, rect)
 
 
 def _draw_hud(surface, ctx):
@@ -123,7 +169,9 @@ def _draw_minimap(surface, ctx, x, y):
                 if dungeon_map.is_wall(tile):
                     pygame.draw.rect(mm_surf, (80, 80, 100), (sx, sy, scale, scale))
                 elif tile == dungeon_map.EXIT_TILE:
-                    pygame.draw.rect(mm_surf, (0, 255, 0), (sx, sy, scale, scale))
+                    import math as _m
+                    pulse = int(150 + 105 * _m.sin(pygame.time.get_ticks() * 0.006))
+                    pygame.draw.rect(mm_surf, (30, min(255, pulse), 50), (sx, sy, scale, scale))
 
     # Player dot
     px = half * scale + int((player.x - pcx) * scale)

@@ -44,7 +44,7 @@ FLOOR_1_ENEMIES = [
     ("lizard_grunt", 2, 9),
     ("lizard_grunt", 6, 4),
     ("lizard_grunt", 10, 12),
-    ("lizard_soldier", 9, 8),
+    ("lizard_soldier", 10, 7),
 ]
 
 # Pickup placement: list of (type, row, col)
@@ -89,18 +89,40 @@ def generate_floor(floor_num, width=24, height=24):
             cy += 1 if y2 > cy else -1
         grid[y2][x2] = EMPTY
 
-    # Add some organic walls on deeper floors
+    # Add some organic walls on deeper floors (before placing entities)
     if floor_num >= 2:
         for y in range(height):
             for x in range(width):
                 if grid[y][x] in WALL_TILES and random.random() < 0.3:
                     grid[y][x] = WALL_ORGANIC
 
-    # Place spawn in first room, exit in last room
+    # Place spawn in first room, exit in the room farthest from spawn
     spawn = (rooms[0][0] + 1, rooms[0][1] + 1)
+    spawn_cx = rooms[0][0] + rooms[0][2] // 2
+    spawn_cy = rooms[0][1] + rooms[0][3] // 2
+
+    best_dist = -1
     exit_room = rooms[-1]
+    for room in rooms[1:]:
+        rcx = room[0] + room[2] // 2
+        rcy = room[1] + room[3] // 2
+        d = (rcx - spawn_cx) ** 2 + (rcy - spawn_cy) ** 2
+        if d > best_dist:
+            best_dist = d
+            exit_room = room
+
     exit_pos = (exit_room[0] + exit_room[2] // 2, exit_room[1] + exit_room[3] // 2)
     grid[exit_pos[1]][exit_pos[0]] = EXIT_TILE
+
+    # Restyle existing walls near exit to metal for a distinctive frame
+    for dy in range(-2, 3):
+        for dx in range(-2, 3):
+            if dy == 0 and dx == 0:
+                continue
+            ey = exit_pos[1] + dy
+            ex = exit_pos[0] + dx
+            if 0 <= ey < height and 0 <= ex < width and grid[ey][ex] in WALL_TILES:
+                grid[ey][ex] = WALL_METAL
 
     # Place enemies
     enemies = []

@@ -108,7 +108,28 @@ def draw_menu(
     line_h = int(36 * fs)
     start_y = screen_rect.centery + 10
 
-    if stats is not None and stats.rts_submenu_active:
+    if stats is not None and stats.dungeon_submenu_active:
+        from events import _get_dungeon_submenu_items
+
+        header = item_font.render("Dungeon", True, (200, 50, 50))
+        screen.blit(header, header.get_rect(center=(cx, start_y - line_h)))
+
+        items = _get_dungeon_submenu_items()
+        for i, (label, _action, _floor) in enumerate(items):
+            if stats.dungeon_submenu_cursor == i:
+                color = (200, 50, 50)
+                label = "> " + label
+            else:
+                color = (200, 200, 200)
+            surf = item_font.render(label, True, color)
+            screen.blit(surf, surf.get_rect(center=(cx, start_y + i * line_h)))
+
+        hint = small_font.render("ESC to go back", True, (120, 120, 120))
+        screen.blit(
+            hint,
+            hint.get_rect(center=(cx, start_y + len(items) * line_h + 20)),
+        )
+    elif stats is not None and stats.rts_submenu_active:
         # RTS sub-menu
         header = item_font.render("RTS Mode", True, (0, 220, 80))
         screen.blit(header, header.get_rect(center=(cx, start_y - line_h)))

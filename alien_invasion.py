@@ -159,7 +159,8 @@ def run_game():
                         menu_music_playing = False
                     if dungeon_mode is None:
                         dungeon_mode = DungeonMode(
-                            screen, sounds, ai_settings.font_scale
+                            screen, sounds, ai_settings.font_scale,
+                            load_floor=ctx.stats.dungeon_load_floor,
                         )
                     result = dungeon_mode.update()
                     if result == "menu":
@@ -198,7 +199,9 @@ def run_game():
                         # RTS complete — transition to dungeon (Chapter 3)
                         ctx.stats.chapter2_active = False
                         ctx.stats.chapter3_active = True
+                        ctx.stats.dungeon_load_floor = 0
                         rts_mode = None
+                        save_manager.unlock_dungeon()
                 else:
                     renderer_module.draw_victory(
                         screen, ai_settings, ctx.stats, title_font, menu_font, bg

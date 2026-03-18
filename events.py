@@ -13,6 +13,7 @@ MENU_ITEMS = [
     ("Level 3", "start_level", 3),
     ("Boss Fight", "start_level", 4),
     ("RTS Mode", "rts_menu", None),
+    ("Dungeon", "dungeon_menu", None),
 ]
 
 RTS_SUBMENU_ITEMS = [
@@ -66,7 +67,11 @@ def _is_item_unlocked(index, progress):
     """Check whether a menu item at the given index is unlocked."""
     if index < 4:
         return progress.get("max_unlocked_level", 1) >= (index + 1)
-    return progress.get("rts_unlocked", False)
+    if index == 4:
+        return progress.get("rts_unlocked", False)
+    if index == 5:
+        return progress.get("dungeon_unlocked", False) or progress.get("rts_unlocked", False)
+    return False
 
 
 def _move_cursor(stats, direction, progress):
@@ -99,6 +104,17 @@ def _validate_rts_cursor(stats, has_save):
     action = RTS_SUBMENU_ITEMS[stats.rts_submenu_cursor][1]
     if action == "rts_load" and not has_save:
         stats.rts_submenu_cursor = 0
+
+
+def _get_dungeon_submenu_items():
+    """Build dungeon submenu: New Game, unlocked floor entries, Back."""
+    import save_manager
+
+    items = [("New Game", "dungeon_new", 0)]
+    for floor in save_manager.get_dungeon_unlocked_floors():
+        items.append((f"Floor {floor}", "dungeon_load", floor))
+    items.append(("Back", "back", 0))
+    return items
 
 
 def validate_menu_cursor(stats, progress):
@@ -183,6 +199,8 @@ def _cheat_skip_to_rts(ctx):
 
 
 def _cheat_skip_to_dungeon(ctx):
+    import save_manager
+
     ctx.aliens.empty()
     ctx.bullets.empty()
     ctx.drops.empty()
@@ -194,8 +212,10 @@ def _cheat_skip_to_dungeon(ctx):
     ctx.stats.victory_cutscene_active = False
     ctx.stats.chapter2_active = False
     ctx.stats.chapter3_active = True
+    ctx.stats.dungeon_load_floor = 0
     ctx.stats.game_active = False
     ctx.ship.center()
+    save_manager.unlock_dungeon()
 
 
 def check_pause_events(ctx):
@@ -279,6 +299,35 @@ def _handle_menu_key(event, ctx, progress):
     stats = ctx.stats
     has_save = False
 
+    if stats.dungeon_submenu_active:
+        items = _get_dungeon_submenu_items()
+        count = len(items)
+        if event.key == pygame.K_UP:
+            stats.dungeon_submenu_cursor = (stats.dungeon_submenu_cursor - 1) % count
+        elif event.key == pygame.K_DOWN:
+            stats.dungeon_submenu_cursor = (stats.dungeon_submenu_cursor + 1) % count
+        elif event.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
+            stats.dungeon_submenu_active = False
+        elif event.key == pygame.K_RETURN:
+            _, action, floor = items[stats.dungeon_submenu_cursor]
+            if action == "dungeon_new":
+                stats.dungeon_load_floor = 0
+                stats.game_won = True
+                stats.victory_cutscene_active = False
+                stats.chapter3_active = True
+                stats.game_started = True
+            elif action == "dungeon_load":
+                stats.dungeon_load_floor = floor
+                stats.game_won = True
+                stats.victory_cutscene_active = False
+                stats.chapter3_active = True
+                stats.game_started = True
+            elif action == "back":
+                stats.dungeon_submenu_active = False
+        elif event.key == pygame.K_q:
+            sys.exit()
+        return
+
     if stats.rts_submenu_active:
         import save_manager
 
@@ -326,5 +375,8 @@ def _handle_menu_key(event, ctx, progress):
         elif action_type == "rts_menu":
             stats.rts_submenu_active = True
             stats.rts_submenu_cursor = 0
+        elif action_type == "dungeon_menu":
+            stats.dungeon_submenu_active = True
+            stats.dungeon_submenu_cursor = 0
     elif event.key == pygame.K_q:
         sys.exit()

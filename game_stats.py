@@ -21,6 +21,9 @@ class GameStats:
         self.rts_submenu_active = False
         self.rts_submenu_cursor = 0
         self.rts_load_save = False
+        self.dungeon_submenu_active = False
+        self.dungeon_submenu_cursor = 0
+        self.dungeon_load_floor = 0  # 0 = new game, >0 = start from that floor
 
     def reset_stats(self):
         self.score = 0

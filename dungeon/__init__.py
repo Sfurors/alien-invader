@@ -18,7 +18,7 @@ from . import dungeon_renderer
 class DungeonMode:
     """Top-level controller for the Dungeon FPS chapter."""
 
-    def __init__(self, screen, sounds, font_scale=1.0):
+    def __init__(self, screen, sounds, font_scale=1.0, load_floor=0):
         self.screen = screen
         self.sounds = sounds
         self.screen_w = screen.get_width()
@@ -29,7 +29,8 @@ class DungeonMode:
         self.phase = "intro"
         self.intro_timer = 120  # 2 seconds at 60fps
 
-        self._init_floor(1)
+        start_floor = max(1, load_floor) if load_floor else 1
+        self._init_floor(start_floor)
 
         # Capture mouse for FPS controls
         self.mouse_captured = False
@@ -217,6 +218,13 @@ class DungeonMode:
         """Brief transition between floors."""
         self.intro_timer -= 1
 
+        # Unlock next floor once when entering this phase
+        if not getattr(self, "_floor_saved", False):
+            import save_manager
+
+            save_manager.unlock_dungeon_floor(self.ctx.floor_num + 1)
+            self._floor_saved = True
+
         self.screen.fill((0, 0, 0))
         fs = self.font_scale
         font = pygame.font.SysFont("consolas", max(20, int(36 * fs)), bold=True)
@@ -225,6 +233,7 @@ class DungeonMode:
         texts = [
             (font, f"FLOOR {self.ctx.floor_num} CLEARED", (50, 255, 50)),
             (small, "Descending deeper...", (180, 180, 200)),
+            (small, "Progress saved.", (100, 200, 100)),
         ]
         if self.intro_timer < 30:
             texts.append((small, "Press ENTER to continue", (120, 120, 140)))
@@ -252,6 +261,7 @@ class DungeonMode:
 
     def _next_floor(self):
         """Advance to the next dungeon floor."""
+        self._floor_saved = False
         next_num = self.ctx.floor_num + 1
         self._init_floor(next_num)
         self._capture_mouse()

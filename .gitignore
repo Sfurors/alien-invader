@@ -20,6 +20,7 @@ pyrightconfig.json
 # Save files
 save_chapter1.json
 save_chapter2.json
+save_dungeon.json
 progress.json
 
 # Claude Code local settings

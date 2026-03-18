@@ -127,5 +127,8 @@ class DungeonSettings:
     FLOOR_COLOR = (40, 35, 30)
     CEILING_COLOR = (20, 15, 15)
 
+    # Exit portal color (bright green glow)
+    EXIT_COLOR = (30, 255, 80)
+
     # HUD
     HUD_HEIGHT = 40  # pixels in render space

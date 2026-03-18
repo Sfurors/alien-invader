@@ -7,11 +7,12 @@ import tempfile
 _SAVE_DIR = os.path.dirname(os.path.abspath(__file__))
 _CH1_FILE = os.path.join(_SAVE_DIR, "save_chapter1.json")
 _CH2_FILE = os.path.join(_SAVE_DIR, "save_chapter2.json")
+_DUNGEON_FILE = os.path.join(_SAVE_DIR, "save_dungeon.json")
 _PROGRESS_FILE = os.path.join(_SAVE_DIR, "progress.json")
 
 SAVE_VERSION = 1
 
-_DEFAULT_PROGRESS = {"max_unlocked_level": 1, "rts_unlocked": False}
+_DEFAULT_PROGRESS = {"max_unlocked_level": 1, "rts_unlocked": False, "dungeon_unlocked": False}
 
 
 # ── Progress (level unlock) ──────────────────────────────────
@@ -35,11 +36,14 @@ def load_progress():
     return dict(_DEFAULT_PROGRESS)
 
 
-def save_progress(max_unlocked_level, rts_unlocked):
+def save_progress(max_unlocked_level, rts_unlocked, dungeon_unlocked=None):
+    if dungeon_unlocked is None:
+        dungeon_unlocked = load_progress().get("dungeon_unlocked", False)
     data = {
         "version": SAVE_VERSION,
         "max_unlocked_level": max_unlocked_level,
         "rts_unlocked": rts_unlocked,
+        "dungeon_unlocked": dungeon_unlocked,
     }
     _write_json(_PROGRESS_FILE, data)
 
@@ -60,6 +64,46 @@ def unlock_rts():
     progress["rts_unlocked"] = True
     progress["max_unlocked_level"] = max(progress.get("max_unlocked_level", 1), 4)
     save_progress(progress["max_unlocked_level"], True)
+
+
+def unlock_dungeon():
+    """Mark Dungeon mode as unlocked. Called after beating RTS."""
+    progress = load_progress()
+    progress["dungeon_unlocked"] = True
+    save_progress(
+        progress["max_unlocked_level"],
+        progress.get("rts_unlocked", False),
+        dungeon_unlocked=True,
+    )
+
+
+# ── Chapter 3 (Dungeon) ─────────────────────────────────────
+
+
+def has_dungeon_save():
+    return os.path.isfile(_DUNGEON_FILE)
+
+
+def get_dungeon_unlocked_floors():
+    """Return sorted list of floor numbers the player has unlocked."""
+    data = _read_json(_DUNGEON_FILE)
+    if not data or "unlocked_floors" not in data:
+        return []
+    return sorted(data["unlocked_floors"])
+
+
+def unlock_dungeon_floor(floor_num):
+    """Mark a floor as unlocked. Called after completing the previous floor."""
+    data = _read_json(_DUNGEON_FILE) or {"version": SAVE_VERSION, "unlocked_floors": []}
+    floors = set(data.get("unlocked_floors", []))
+    floors.add(floor_num)
+    data["unlocked_floors"] = sorted(floors)
+    _write_json(_DUNGEON_FILE, data)
+
+
+def delete_dungeon_saves():
+    if os.path.isfile(_DUNGEON_FILE):
+        os.remove(_DUNGEON_FILE)
 
 
 # ── Chapter 2 ────────────────────────────────────────────────
