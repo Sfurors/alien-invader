@@ -142,10 +142,14 @@ class RTSMode:
         self.rts_ctx.enemy_buildings.add(hive)
         self.rts_ctx.all_entities.add(hive)
 
-        # Starting units
-        scout = BaseUnit("scout", sx + 3, sy + 2, "lizard")
-        self.rts_ctx.enemy_units.add(scout)
-        self.rts_ctx.all_entities.add(scout)
+        # Starting units – two offensive scouts and one economic drone
+        scout1 = BaseUnit("scout", sx + 3, sy + 2, "lizard")
+        self.rts_ctx.enemy_units.add(scout1)
+        self.rts_ctx.all_entities.add(scout1)
+
+        scout2 = BaseUnit("scout", sx + 5, sy + 2, "lizard")
+        self.rts_ctx.enemy_units.add(scout2)
+        self.rts_ctx.all_entities.add(scout2)
 
         drone = BaseUnit("drone", sx + 4, sy + 2, "lizard")
         self.rts_ctx.enemy_units.add(drone)

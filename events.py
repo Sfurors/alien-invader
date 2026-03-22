@@ -140,7 +140,7 @@ def check_keydown_events(event, ctx):
         ctx.ship.moving_down = True
     elif event.key == pygame.K_SPACE:
         fire_bullet(ctx)
-    elif event.key == pygame.K_b:
+    elif event.key == pygame.K_b and not ctx.stats.boss_active:
         if ctx.rockets.sprites():
             collision_module.detonate_all_rockets(ctx)
         else:
